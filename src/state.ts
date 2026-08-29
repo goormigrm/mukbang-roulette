@@ -272,18 +272,24 @@ export class Store {
   }
 
   // ---- 스핀 / 리롤 상태 머신 ----
-  /** 스핀 시작(자유 회전). 정지 버튼을 누르기 전까지 당첨은 정해지지 않는다 */
-  beginSpin(): boolean {
-    if (this.menus.length < 2) return false
-    if (this.phase !== 'collect' && this.phase !== 'armed') return false
+  /** 스핀 시작(자유 회전). 정지 버튼을 누르기 전까지 당첨은 정해지지 않는다.
+   *  useCredit=true 면 리롤권을 1개 소모하는 리롤, false 면 자유 (재)돌리기 —
+   *  당첨 발표 후에도 리롤 도네 없이 그냥 다시 돌릴 수 있다 ("3번 돌려서 나온 걸로" 운영) */
+  beginSpin(useCredit = false): boolean {
+    if (this.menus.length < 2 || this.phase === 'spinning') return false
 
-    if (this.phase === 'armed') {
+    if (useCredit) {
+      if (this.phase !== 'armed' || this.rerollCredits < 1) return false
       this.rerollCredits--
       this.rerollCount++
       this.addFeed(
         'reroll',
         `🔄 리롤 사용! (남은 리롤권 ${this.rerollCredits}개) — 직전 당첨 메뉴 포함하여 다시 돌립니다`,
       )
+    } else if (this.phase !== 'collect') {
+      // 당첨 발표/리롤 대기 상태에서의 자유 재돌리기 — 이전 결과는 기록하지 않고 무시
+      this.stopWindowTimer()
+      this.addFeed('info', '🔁 다시 돌리기 — 이전 결과를 무시하고 새로 돌립니다')
     }
 
     this.phase = 'spinning'

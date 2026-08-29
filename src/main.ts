@@ -16,8 +16,8 @@ const wheel = new RouletteWheel(
   },
 )
 
-function doSpin(): void {
-  if (!store.beginSpin()) return
+function doSpin(useCredit = false): void {
+  if (!store.beginSpin(useCredit)) return
   wheel.startFreeSpin()
 }
 
@@ -181,7 +181,7 @@ function renderStatus(): void {
         : `<div class="big">🌀 돌아가는 중 — [🛑 정지!]를 누르면 멈춥니다</div>`
       break
     case 'decision':
-      html = `<div class="big">🎉 당첨! [🔔 리롤 도네 받기]로 ${s.rerollWindowSec}초 접수를 열거나, [✅ 결과 확정]을 누르세요</div>`
+      html = `<div class="big">🎉 당첨! [🔔 리롤 도네 받기] · [🔁 다시 돌리기] · [✅ 결과 확정] 중 선택하세요</div>`
       break
     case 'window': {
       const remain = Math.ceil(store.windowRemainMs / 1000)
@@ -207,8 +207,8 @@ function renderButtons(): void {
     btnSpin.disabled = wheel.isStopping
     btnSpin.classList.add('stop-mode')
   } else {
-    btnSpin.textContent = '돌리기!'
-    btnSpin.disabled = !(store.phase === 'collect' && store.menus.length >= 2)
+    btnSpin.textContent = store.phase === 'collect' ? '돌리기!' : '🔁 다시 돌리기'
+    btnSpin.disabled = store.menus.length < 2
     btnSpin.classList.remove('stop-mode')
   }
   btnOpenWindow.hidden = store.phase !== 'decision'
@@ -267,10 +267,10 @@ store.on('armed', () => {
 // ---------- 컨트롤 ----------
 btnSpin.addEventListener('click', () => {
   if (store.phase === 'spinning') doStop()
-  else doSpin()
+  else doSpin(false)
 })
 btnOpenWindow.addEventListener('click', () => store.startRerollWindow())
-btnReroll.addEventListener('click', doSpin)
+btnReroll.addEventListener('click', () => doSpin(true))
 btnConfirm.addEventListener('click', () => store.confirmResult())
 btnPause.addEventListener('click', () => store.togglePaused())
 

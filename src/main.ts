@@ -321,6 +321,33 @@ document.querySelectorAll<HTMLButtonElement>('.tab').forEach((btn) => {
   btn.addEventListener('click', () => activateTab(btn.dataset.tab ?? 'current'))
 })
 
+// ---------- 메뉴 목록 내보내기 / 불러오기 ----------
+$('#btn-export-menus').addEventListener('click', () => {
+  const blob = new Blob([store.exportMenusJson()], { type: 'application/json' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `mukbang-roulette-메뉴.json`
+  a.click()
+  URL.revokeObjectURL(a.href)
+})
+
+$<HTMLInputElement>('#import-menus-file').addEventListener('change', async (e) => {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (store.phase === 'spinning') return
+  if (store.menus.length > 0 && !confirm(`현재 후보 ${store.menus.length}종을 지우고 파일의 메뉴로 교체할까요?`)) {
+    return
+  }
+  try {
+    const n = store.importMenusJson(await file.text())
+    alert(`메뉴 ${n}종을 불러왔습니다.`)
+  } catch (err) {
+    alert(`불러오기 실패: ${err instanceof Error ? err.message : String(err)}`)
+  }
+})
+
 // ---------- 기록 내보내기 / 불러오기 ----------
 $('#btn-export').addEventListener('click', () => {
   const blob = new Blob([store.exportHistoryJson()], { type: 'application/json' })

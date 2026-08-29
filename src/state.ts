@@ -388,6 +388,51 @@ export class Store {
     this.changed()
   }
 
+  // ---- 메뉴 목록 내보내기 / 불러오기 ----
+  exportMenusJson(): string {
+    return JSON.stringify(
+      {
+        app: 'mukbang-roulette',
+        type: 'menus',
+        exportedAt: new Date().toISOString(),
+        menus: this.menus.map((m) => ({ name: m.name, weight: m.weight, donors: [...m.donors] })),
+      },
+      null,
+      2,
+    )
+  }
+
+  /** 메뉴 JSON을 불러와 현재 후보 목록을 통째로 교체. 불러온 메뉴 수를 반환 */
+  importMenusJson(text: string): number {
+    const data = JSON.parse(text) as
+      | { menus?: { name?: string; weight?: number; donors?: string[] }[] }
+      | { name?: string; weight?: number }[]
+    const raw = Array.isArray(data) ? data : data.menus
+    if (!Array.isArray(raw)) throw new Error('형식이 올바르지 않습니다 (menus 배열 필요)')
+    const menus: MenuItem[] = []
+    for (const m of raw) {
+      const name = String(m?.name ?? '').trim().slice(0, 20)
+      const weight = Math.max(1, Math.floor(Number((m as { weight?: number })?.weight) || 1))
+      if (!name) continue
+      const existing = menus.find((x) => x.name === name)
+      if (existing) existing.weight += weight
+      else
+        menus.push({
+          id: this.nextMenuId++,
+          name,
+          weight,
+          donors: Array.isArray((m as { donors?: string[] }).donors)
+            ? ((m as { donors?: string[] }).donors as string[]).map(String).slice(0, 10)
+            : [],
+        })
+    }
+    if (menus.length === 0) throw new Error('불러올 메뉴가 없습니다')
+    this.menus = menus
+    this.addFeed('info', `📂 메뉴 ${menus.length}종 불러오기 완료 (기존 목록 교체)`)
+    this.changed()
+    return menus.length
+  }
+
   // ---- 기록 내보내기 / 불러오기 ----
   exportHistoryJson(): string {
     return JSON.stringify(

@@ -9,4 +9,4 @@ export const PRESET_CLIENT_ID = '95337781-0490-4c9b-ac9a-9577a9ef4db0'
 
 /** 배포한 Cloudflare Worker 주소 (예: 'https://mukbang-proxy.xxx.workers.dev')
  *  Client Secret은 여기 코드가 아니라 워커의 환경 변수(CHZZK_CLIENT_SECRET)에 저장한다 */
-export const PRESET_PROXY_URL = ''
+export const PRESET_PROXY_URL = 'https://mukbang-proxy.1117tkdrms.workers.dev'

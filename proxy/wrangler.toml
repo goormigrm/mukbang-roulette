@@ -1,0 +1,4 @@
+# Cloudflare Worker 배포 설정 — proxy 폴더에서 `npx wrangler deploy` 로 배포
+name = "mukbang-proxy"
+main = "worker.js"
+compatibility_date = "2026-08-01"

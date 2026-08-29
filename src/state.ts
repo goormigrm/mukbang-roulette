@@ -17,7 +17,9 @@ export interface Round {
   menus: { name: string; weight: number; donors: string[] }[]
 }
 
-export type Phase = 'collect' | 'spinning' | 'window' | 'armed'
+// collect(모집) → spinning(회전) → decision(당첨 발표, 스트리머 선택 대기)
+//   → window(리롤 도네 접수, 타이머) → armed(리롤권 보유) → 확정 시 collect로
+export type Phase = 'collect' | 'spinning' | 'decision' | 'window' | 'armed'
 
 export interface Settings {
   rerollCost: number
@@ -308,24 +310,33 @@ export class Store {
     return { index }
   }
 
-  /** 스핀 애니메이션 종료 → 당첨 발표. 남은 리롤권이 있으면 즉시 리롤 가능 상태 유지 */
+  /** 스핀 애니메이션 종료 → 당첨 발표.
+   *  리롤 도네 접수는 자동으로 열리지 않고 스트리머가 [리롤 도네 받기]를 눌러야 시작된다.
+   *  남은 리롤권이 있으면 즉시 리롤 가능 상태 유지 */
   finishSpin(): void {
     if (this.phase !== 'spinning' || !this.pendingWinner) return
     this.winner = this.pendingWinner
     this.pendingWinner = null
     this.addFeed('win', `🎉 당첨: "${this.winner.name}"`)
     this.emit('winner', this.winner)
-    if (this.rerollCredits > 0) {
-      this.phase = 'armed'
-    } else {
-      this.phase = 'window'
-      this.startWindowTimer()
-    }
+    this.phase = this.rerollCredits > 0 ? 'armed' : 'decision'
 
     // 스핀 중 대기열 반영 (규칙 엔진을 다시 통과시켜 리롤권 판정도 받게 한다)
     const queued = this.pendingDonations
     this.pendingDonations = []
     for (const d of queued) this.routeDonation(d)
+    this.changed()
+  }
+
+  /** [리롤 도네 받기] — 스트리머가 원하는 타이밍에 리롤 도네 접수를 시작 */
+  startRerollWindow(): void {
+    if (this.phase !== 'decision') return
+    this.phase = 'window'
+    this.addFeed(
+      'reroll',
+      `🔔 리롤 도네 접수 시작! ${this.settings.rerollWindowSec}초 안에 단일 도네 ${this.settings.rerollCost.toLocaleString('ko-KR')}원 이상`,
+    )
+    this.startWindowTimer()
     this.changed()
   }
 
@@ -352,7 +363,7 @@ export class Store {
 
   /** 결과 확정 (확정 버튼 또는 시간 만료) → 라운드 기록 저장 */
   confirmResult(): void {
-    if (this.phase !== 'window' && this.phase !== 'armed') return
+    if (this.phase !== 'decision' && this.phase !== 'window' && this.phase !== 'armed') return
     this.stopWindowTimer()
     const winnerName = this.winner?.name ?? '?'
     this.confirmedWinner = winnerName

@@ -50,7 +50,8 @@ export class RouletteWheel {
   constructor(
     private canvas: HTMLCanvasElement,
     private getItems: () => MenuItem[],
-    private onSegmentCross?: () => void,
+    /** 칸 경계 통과 시 호출. progress: 감속 진행도 0~1 (자유 회전 중엔 0) */
+    private onSegmentCross?: (progress: number) => void,
   ) {
     const resize = () => this.fitCanvas()
     window.addEventListener('resize', resize)
@@ -298,7 +299,9 @@ export class RouletteWheel {
     const idx = this.indexAtPointer()
     if (idx !== prevIdx && now - this.lastTickAt > 45) {
       this.lastTickAt = now
-      this.onSegmentCross?.()
+      const progress =
+        this.mode === 'stopping' ? Math.min(1, (now - this.stopStartAt) / this.stopDuration) : 0
+      this.onSegmentCross?.(progress)
     }
   }
 }

@@ -11,8 +11,8 @@ const $ = <T extends HTMLElement = HTMLElement>(sel: string): T => document.quer
 const wheel = new RouletteWheel(
   $<HTMLCanvasElement>('#wheel'),
   () => store.menus,
-  () => {
-    if (store.settings.sound) sound.tick()
+  (progress) => {
+    if (store.settings.sound) sound.tick(progress)
   },
 )
 
@@ -26,6 +26,7 @@ function doStop(): void {
   const r = store.pickWinner()
   if (!r) return
   wheel.requestStop(r.index, () => store.finishSpin())
+  if (store.settings.sound) sound.startDrumroll()
   renderStatus()
   renderButtons()
 }
@@ -39,6 +40,7 @@ const elTotalSlots = $('#total-slots')
 const elOverlay = $('#winner-overlay')
 const elWinnerName = $('#winner-name')
 const btnSpin = $<HTMLButtonElement>('#btn-spin')
+const btnOpenWindow = $<HTMLButtonElement>('#btn-open-window')
 const btnReroll = $<HTMLButtonElement>('#btn-reroll')
 const btnConfirm = $<HTMLButtonElement>('#btn-confirm')
 const btnPause = $<HTMLButtonElement>('#btn-pause')
@@ -178,6 +180,9 @@ function renderStatus(): void {
         ? `<div class="big reroll-note">두구두구두구... 🥁</div>`
         : `<div class="big">🌀 돌아가는 중 — [🛑 정지!]를 누르면 멈춥니다</div>`
       break
+    case 'decision':
+      html = `<div class="big">🎉 당첨! [🔔 리롤 도네 받기]로 ${s.rerollWindowSec}초 접수를 열거나, [✅ 결과 확정]을 누르세요</div>`
+      break
     case 'window': {
       const remain = Math.ceil(store.windowRemainMs / 1000)
       const pct = (store.windowRemainMs / (s.rerollWindowSec * 1000)) * 100
@@ -206,13 +211,16 @@ function renderButtons(): void {
     btnSpin.disabled = !(store.phase === 'collect' && store.menus.length >= 2)
     btnSpin.classList.remove('stop-mode')
   }
+  btnOpenWindow.hidden = store.phase !== 'decision'
   btnReroll.disabled = store.phase !== 'armed'
+  btnReroll.hidden = store.phase === 'decision'
   btnReroll.textContent = store.rerollCredits > 0 ? `🔄 리롤 ×${store.rerollCredits}` : '🔄 리롤'
-  btnConfirm.hidden = !(store.phase === 'window' || store.phase === 'armed')
+  btnConfirm.hidden = !(store.phase === 'decision' || store.phase === 'window' || store.phase === 'armed')
 }
 
 function renderOverlay(): void {
-  const showLive = (store.phase === 'window' || store.phase === 'armed') && store.winner
+  const showLive =
+    (store.phase === 'decision' || store.phase === 'window' || store.phase === 'armed') && store.winner
   const showConfirmed = store.phase === 'collect' && store.confirmedWinner
   if (showLive) {
     elWinnerName.textContent = store.winner!.name
@@ -249,6 +257,7 @@ store.on('tick', (remainMs) => {
   if (fill) fill.style.width = `${(ms / (store.settings.rerollWindowSec * 1000)) * 100}%`
 })
 store.on('winner', () => {
+  sound.stopDrumroll()
   if (store.settings.sound) sound.fanfare()
 })
 store.on('armed', () => {
@@ -260,6 +269,7 @@ btnSpin.addEventListener('click', () => {
   if (store.phase === 'spinning') doStop()
   else doSpin()
 })
+btnOpenWindow.addEventListener('click', () => store.startRerollWindow())
 btnReroll.addEventListener('click', doSpin)
 btnConfirm.addEventListener('click', () => store.confirmResult())
 btnPause.addEventListener('click', () => store.togglePaused())
@@ -268,7 +278,7 @@ $('#btn-clear').addEventListener('click', () => {
   if (store.phase === 'spinning') return
   if (confirm('후보 목록을 전부 비울까요? (기록 탭의 지난 라운드는 유지됩니다)')) {
     store.clearMenus()
-    modal.close('cancel')
+    activateTab('current')
   }
 })
 
@@ -299,12 +309,16 @@ $<HTMLFormElement>('#test-form').addEventListener('submit', (e) => {
 })
 
 // ---------- 탭 ----------
-document.querySelectorAll<HTMLButtonElement>('.tab').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b === btn))
-    $('#tab-current').hidden = btn.dataset.tab !== 'current'
-    $('#tab-history').hidden = btn.dataset.tab !== 'history'
+function activateTab(name: string): void {
+  document.querySelectorAll<HTMLButtonElement>('.tab').forEach((b) => {
+    b.classList.toggle('active', b.dataset.tab === name)
   })
+  document.querySelectorAll<HTMLElement>('.tab-panel').forEach((p) => {
+    p.hidden = p.id !== `tab-${name}`
+  })
+}
+document.querySelectorAll<HTMLButtonElement>('.tab').forEach((btn) => {
+  btn.addEventListener('click', () => activateTab(btn.dataset.tab ?? 'current'))
 })
 
 // ---------- 기록 내보내기 / 불러오기 ----------
@@ -332,36 +346,31 @@ $<HTMLInputElement>('#import-file').addEventListener('change', async (e) => {
   }
 })
 
-// ---------- 설정 모달 ----------
-const modal = $<HTMLDialogElement>('#settings-modal')
-$('#btn-settings').addEventListener('click', () => {
+// ---------- 설정 (설정 탭, 변경 즉시 저장) ----------
+$('#btn-settings').addEventListener('click', () => activateTab('settings'))
+
+function initSettingsInputs(): void {
   $<HTMLInputElement>('#set-reroll-cost').value = String(store.settings.rerollCost)
   $<HTMLInputElement>('#set-reroll-sec').value = String(store.settings.rerollWindowSec)
   $<HTMLInputElement>('#set-min-amount').value = String(store.settings.minAmount)
   $<HTMLInputElement>('#set-won-per-slot').value = String(store.settings.wonPerSlot)
   $<HTMLInputElement>('#set-sound').checked = store.settings.sound
-  $<HTMLInputElement>('#set-client-id').value = store.settings.clientId
-  $<HTMLInputElement>('#set-client-secret').value = store.settings.clientSecret
-  $<HTMLInputElement>('#set-proxy-url').value = store.settings.proxyUrl
-  modal.showModal()
-})
+}
 
-function saveSettingsInputs(): void {
+function applySettingsInputs(): void {
   store.updateSettings({
     rerollCost: Math.max(1000, Number($<HTMLInputElement>('#set-reroll-cost').value) || 20000),
     rerollWindowSec: Math.min(600, Math.max(5, Number($<HTMLInputElement>('#set-reroll-sec').value) || 60)),
     minAmount: Math.max(0, Number($<HTMLInputElement>('#set-min-amount').value) || 1000),
     wonPerSlot: Math.max(500, Number($<HTMLInputElement>('#set-won-per-slot').value) || 1000),
     sound: $<HTMLInputElement>('#set-sound').checked,
-    clientId: $<HTMLInputElement>('#set-client-id').value.trim(),
-    clientSecret: $<HTMLInputElement>('#set-client-secret').value.trim(),
-    proxyUrl: $<HTMLInputElement>('#set-proxy-url').value.trim(),
   })
 }
 
-modal.addEventListener('close', () => {
-  if (modal.returnValue === 'save') saveSettingsInputs()
-})
+for (const id of ['#set-reroll-cost', '#set-reroll-sec', '#set-min-amount', '#set-won-per-slot', '#set-sound']) {
+  $(id).addEventListener('change', applySettingsInputs)
+}
+initSettingsInputs()
 
 // ---------- 치지직 연동 ----------
 const connBadge = $('#conn-badge')
@@ -389,20 +398,15 @@ chzzk.onStatus((s, detail) => {
   connBadge.title = detail ?? ''
 })
 
-$('#redirect-uri-hint').textContent = chzzk.redirectUri()
-
 $('#btn-chzzk-login').addEventListener('click', () => {
-  saveSettingsInputs() // 로그인 페이지로 이동하기 전에 입력값 보존
   chzzk.startLogin()
 })
 
 $('#btn-chzzk-connect').addEventListener('click', () => {
-  saveSettingsInputs()
   if (!chzzk.hasToken()) {
     alert('먼저 [1) 치지직 로그인]을 진행해주세요.')
     return
   }
-  modal.close('cancel')
   void chzzk.connect()
 })
 

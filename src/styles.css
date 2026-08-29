@@ -687,10 +687,21 @@ dialog::backdrop {
   word-break: break-all;
 }
 
-.settings fieldset.danger-zone {
-  border-color: var(--red-deep);
+.settings .card > label {
+  margin-bottom: 12px;
 }
 
-.danger-zone legend {
+.danger-card {
+  outline-color: var(--red-deep);
+}
+
+.danger-title {
   color: var(--red-deep);
+}
+
+.footer {
+  text-align: center;
+  padding: 18px 0 26px;
+  color: var(--muted);
+  font-size: 13px;
 }

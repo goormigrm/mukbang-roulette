@@ -167,7 +167,7 @@ function renderHistory(): void {
 
 function renderStatus(): void {
   const s = store.settings
-  const cost = s.rerollCost.toLocaleString('ko-KR')
+  const cost = store.effectiveRerollCost().toLocaleString('ko-KR')
   let html = ''
   switch (store.phase) {
     case 'collect':
@@ -181,7 +181,9 @@ function renderStatus(): void {
         : `<div class="big">🌀 돌아가는 중 — [🛑 정지!]를 누르면 멈춥니다</div>`
       break
     case 'decision':
-      html = `<div class="big">🎉 당첨! [🔔 리롤 도네 받기] · [🔁 다시 돌리기] · [✅ 결과 확정] 중 선택하세요</div>`
+      html = store.windowOpened
+        ? `<div class="big reroll-note">⏱ 접수 마감 — 늦게 도착한 ${cost}원 이상 도네는 확정 전까지 리롤권으로 인정됩니다. 재접수·다시 돌리기·확정 중 선택하세요</div>`
+        : `<div class="big">🎉 당첨! [🔔 리롤 도네 받기] · [🔁 다시 돌리기] · [✅ 결과 확정] 중 선택하세요</div>`
       break
     case 'window': {
       const remain = Math.ceil(store.windowRemainMs / 1000)
@@ -212,6 +214,7 @@ function renderButtons(): void {
     btnSpin.classList.remove('stop-mode')
   }
   btnOpenWindow.hidden = store.phase !== 'decision'
+  btnOpenWindow.textContent = store.windowOpened ? '🔔 리롤 재접수 (금액 변경)' : '🔔 리롤 도네 받기'
   btnReroll.disabled = store.phase !== 'armed'
   btnReroll.hidden = store.phase === 'decision'
   btnReroll.textContent = store.rerollCredits > 0 ? `🔄 리롤 ×${store.rerollCredits}` : '🔄 리롤'
@@ -269,7 +272,18 @@ btnSpin.addEventListener('click', () => {
   if (store.phase === 'spinning') doStop()
   else doSpin(false)
 })
-btnOpenWindow.addEventListener('click', () => store.startRerollWindow())
+btnOpenWindow.addEventListener('click', () => {
+  // 회차마다 리롤 금액을 올려 받는 운영(2만 → 4만 → 10만)을 위해 접수 시작 시 금액 입력
+  const def = store.effectiveRerollCost()
+  const input = prompt('이번 리롤 비용(원)을 입력하세요', String(def))
+  if (input === null) return
+  const cost = Number(input.replace(/[,\s원]/g, ''))
+  if (!Number.isFinite(cost) || cost < 1000) {
+    alert('1,000원 이상의 숫자를 입력해주세요.')
+    return
+  }
+  store.startRerollWindow(cost)
+})
 btnReroll.addEventListener('click', () => doSpin(true))
 btnConfirm.addEventListener('click', () => store.confirmResult())
 btnPause.addEventListener('click', () => store.togglePaused())

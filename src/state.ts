@@ -79,6 +79,10 @@ export class Store {
   rerollUsers: string[] = []
   rerollCount = 0
   windowRemainMs = 0
+  /** 이번 회차 리롤 비용 (접수 시작 시 입력, null이면 설정 기본값). 확정 시 초기화 */
+  currentRerollCost: number | null = null
+  /** 이번 당첨 결과에 대해 접수를 연 적이 있는지 — 마감 후 늦게 도착한 도네 인정용 */
+  windowOpened = false
 
   private pendingWinner: MenuItem | null = null
   private pendingDonations: DonationInput[] = []
@@ -223,16 +227,25 @@ export class Store {
       return
     }
 
-    // 리롤 판정: 리롤 대기/리롤 가능 중 + 단일 도네 금액 ≥ 리롤 비용 → 리롤권 1개 누적
-    // (일시정지와 무관하게 동작)
-    if ((this.phase === 'window' || this.phase === 'armed') && d.amount >= this.settings.rerollCost) {
+    // 리롤 판정: 단일 도네 금액 ≥ 이번 회차 리롤 비용 → 리롤권 1개 누적 (일시정지와 무관하게 동작)
+    // 접수 중(window)·리롤권 보유(armed)뿐 아니라, 접수가 마감된 뒤(decision + windowOpened)에도
+    // 인정한다 — 치지직 연동 지연으로 몇 초 늦게 도착하는 도네 대비
+    const rerollEligible =
+      this.phase === 'window' ||
+      this.phase === 'armed' ||
+      (this.phase === 'decision' && this.windowOpened)
+    if (rerollEligible && d.amount >= this.effectiveRerollCost()) {
+      const late = this.phase === 'decision'
       this.rerollCredits++
       this.rerollUsers.push(d.nick)
-      if (this.phase === 'window') {
+      if (this.phase !== 'armed') {
         this.stopWindowTimer()
         this.phase = 'armed'
       }
-      this.addFeed('reroll', `🔄 [${d.nick}] ${won}원 — 리롤권 +1 (보유 ${this.rerollCredits}개)`)
+      this.addFeed(
+        'reroll',
+        `🔄 [${d.nick}] ${won}원 — 리롤권 +1 (보유 ${this.rerollCredits}개)${late ? ' · 마감 후 도착분 인정' : ''}`,
+      )
       this.emit('armed', d.nick)
       return
     }
@@ -325,6 +338,7 @@ export class Store {
     this.pendingWinner = null
     this.addFeed('win', `🎉 당첨: "${this.winner.name}"`)
     this.emit('winner', this.winner)
+    this.windowOpened = false // 새 결과 — 접수 이력 초기화 (리롤 비용은 확정 전까지 유지)
     this.phase = this.rerollCredits > 0 ? 'armed' : 'decision'
 
     // 스핀 중 대기열 반영 (규칙 엔진을 다시 통과시켜 리롤권 판정도 받게 한다)
@@ -334,13 +348,23 @@ export class Store {
     this.changed()
   }
 
-  /** [리롤 도네 받기] — 스트리머가 원하는 타이밍에 리롤 도네 접수를 시작 */
-  startRerollWindow(): void {
+  /** 이번 회차에 적용되는 리롤 비용 */
+  effectiveRerollCost(): number {
+    return this.currentRerollCost ?? this.settings.rerollCost
+  }
+
+  /** [리롤 도네 받기] — 스트리머가 원하는 타이밍에, 이번 회차 금액을 정해 접수를 시작.
+   *  (예: 1차 2만원 → 2차 4만원 → 3차 10만원처럼 회차마다 올려 받는 운영) */
+  startRerollWindow(cost?: number): void {
     if (this.phase !== 'decision') return
+    if (cost !== undefined && Number.isFinite(cost) && cost >= 1000) {
+      this.currentRerollCost = Math.floor(cost)
+    }
     this.phase = 'window'
+    this.windowOpened = true
     this.addFeed(
       'reroll',
-      `🔔 리롤 도네 접수 시작! ${this.settings.rerollWindowSec}초 안에 단일 도네 ${this.settings.rerollCost.toLocaleString('ko-KR')}원 이상`,
+      `🔔 리롤 도네 접수 시작! ${this.settings.rerollWindowSec}초 안에 단일 도네 ${this.effectiveRerollCost().toLocaleString('ko-KR')}원 이상`,
     )
     this.startWindowTimer()
     this.changed()
@@ -354,8 +378,12 @@ export class Store {
       this.windowRemainMs = Math.max(0, this.windowDeadline - Date.now())
       this.emit('tick', this.windowRemainMs)
       if (this.windowRemainMs <= 0) {
-        this.addFeed('info', '⏱ 리롤 시간 종료 — 결과 확정')
-        this.confirmResult()
+        // 마감돼도 자동 확정하지 않는다 — 연동 지연으로 늦게 도착하는 리롤 도네를
+        // 확정 전까지 인정하고, 스트리머가 재접수/확정을 선택한다
+        this.stopWindowTimer()
+        this.phase = 'decision'
+        this.addFeed('info', '⏱ 리롤 접수 마감 — 늦게 도착한 리롤 도네도 확정 전까지 인정됩니다')
+        this.changed()
       }
     }, 200)
   }
@@ -391,6 +419,8 @@ export class Store {
     this.rerollCount = 0
     this.rerollCredits = 0
     this.rerollUsers = []
+    this.currentRerollCost = null
+    this.windowOpened = false
     this.changed()
   }
 

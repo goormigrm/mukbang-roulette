@@ -205,6 +205,42 @@ body {
   }
 }
 
+/* 리롤 대기 중앙 대형 카운트다운 (10ms 단위) */
+.big-timer {
+  margin-top: 14px;
+  padding: 6px 28px;
+  font-size: clamp(64px, 8vw, 116px);
+  font-weight: 900;
+  line-height: 1.05;
+  color: var(--red-deep);
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 248, 240, 0.92);
+  border: 5px solid var(--red-deep);
+  border-radius: 18px;
+  box-shadow: 0 8px 30px rgba(14, 8, 8, 0.35);
+  animation: timer-pulse 1s ease-in-out infinite;
+}
+
+.big-timer.urgent {
+  color: #ffffff;
+  background: var(--red-deep);
+  border-color: var(--ink);
+  animation: timer-urgent 0.5s ease-in-out infinite;
+}
+
+@keyframes timer-pulse {
+  50% {
+    transform: scale(1.03);
+  }
+}
+
+@keyframes timer-urgent {
+  50% {
+    transform: scale(1.09);
+    box-shadow: 0 0 40px rgba(200, 16, 46, 0.7);
+  }
+}
+
 /* 상태 바 (리롤 카운트다운 / 안내) */
 .status-bar {
   width: min(100%, 620px);

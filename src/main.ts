@@ -39,6 +39,7 @@ const elStatusBar = $('#status-bar')
 const elTotalSlots = $('#total-slots')
 const elOverlay = $('#winner-overlay')
 const elWinnerName = $('#winner-name')
+const elBigTimer = $('#big-timer')
 const btnSpin = $<HTMLButtonElement>('#btn-spin')
 const btnOpenWindow = $<HTMLButtonElement>('#btn-open-window')
 const btnReroll = $<HTMLButtonElement>('#btn-reroll')
@@ -250,6 +251,37 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 }
 
+// ---------- 룰렛 중앙 대형 카운트다운 (10ms 단위) ----------
+let bigTimerRaf = 0
+
+function fmtRemain(ms: number): string {
+  const cs = Math.floor((ms % 1000) / 10) // 10ms 단위 (센티초)
+  const s = Math.floor(ms / 1000)
+  if (s >= 60) return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}.${String(cs).padStart(2, '0')}`
+  return `${s}.${String(cs).padStart(2, '0')}`
+}
+
+function bigTimerFrame(): void {
+  if (store.phase !== 'window') {
+    elBigTimer.hidden = true
+    return
+  }
+  const remain = Math.max(0, store.windowDeadline - Date.now())
+  elBigTimer.textContent = fmtRemain(remain)
+  elBigTimer.classList.toggle('urgent', remain <= 10_000)
+  bigTimerRaf = requestAnimationFrame(bigTimerFrame)
+}
+
+function renderBigTimer(): void {
+  cancelAnimationFrame(bigTimerRaf)
+  if (store.phase === 'window') {
+    elBigTimer.hidden = false
+    bigTimerFrame()
+  } else {
+    elBigTimer.hidden = true
+  }
+}
+
 function renderAll(): void {
   renderPause()
   renderMenus()
@@ -258,6 +290,7 @@ function renderAll(): void {
   renderStatus()
   renderButtons()
   renderOverlay()
+  renderBigTimer()
   if (!wheel.isSpinning) wheel.draw()
 }
 

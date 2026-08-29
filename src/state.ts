@@ -90,7 +90,8 @@ export class Store {
   private nextMenuId = 1
   private nextRoundId = 1
   private windowTimer: ReturnType<typeof setInterval> | null = null
-  private windowDeadline = 0
+  /** 리롤 접수 마감 시각 (epoch ms) — UI가 10ms 단위 카운트다운을 그릴 때 직접 읽는다 */
+  windowDeadline = 0
   private listeners = new Map<EventName, Set<(arg?: unknown) => void>>()
 
   constructor() {

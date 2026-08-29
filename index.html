@@ -22,7 +22,8 @@
       <div class="topbar-actions">
         <button id="btn-pause" class="pause-toggle" title="도네이션 메뉴 반영 일시정지/재개"></button>
         <span id="conn-badge" class="badge badge-off">치지직 미연결</span>
-        <button id="btn-settings" class="btn-ghost">⚙ 설정</button>
+        <button id="btn-chzzk-login" class="btn-ghost" title="공식 치지직 페이지에서 동의만 하면 연동됩니다">치지직 로그인</button>
+        <button id="btn-chzzk-logout" class="btn-ghost" title="연결 해제 및 토큰 삭제">치지직 로그아웃</button>
       </div>
     </header>
 
@@ -104,18 +105,6 @@
             <label>최소 인정 금액 (원) <input id="set-min-amount" type="number" step="500" min="0" /></label>
             <label>1칸당 금액 (원) <input id="set-won-per-slot" type="number" step="500" min="500" /></label>
             <label class="check"><input id="set-sound" type="checkbox" /> 효과음 켜기</label>
-          </div>
-          <div class="card frame">
-            <h2>치지직 연동</h2>
-            <p class="hint">
-              [1) 치지직 로그인]을 누르면 <b>공식 치지직(chzzk.naver.com) 페이지</b>로 이동합니다. 이 사이트에는
-              아이디나 비밀번호를 입력하지 않으며, 이미 치지직에 로그인된 브라우저라면 동의 클릭만으로 연동됩니다.
-            </p>
-            <div class="row">
-              <button type="button" id="btn-chzzk-login" class="btn-small">1) 치지직 로그인</button>
-              <button type="button" id="btn-chzzk-connect" class="btn-small">2) 연결</button>
-              <button type="button" id="btn-chzzk-logout" class="btn-small">연결 해제·로그아웃</button>
-            </div>
           </div>
           <div class="card frame danger-card">
             <h2 class="danger-title">⚠ 위험 구역</h2>

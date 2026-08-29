@@ -52,8 +52,9 @@ function renderPause(): void {
 
 function renderMenus(): void {
   const busy = store.phase === 'spinning'
-  // 총 칸 수는 사실상 도네 총액이 노출되는 셈이라 표시하지 않는다
+  // 총 칸 수는 사실상 도네 총액이 노출되는 셈이라 표시하지 않는다 (퍼센트는 노출 OK)
   elTotalSlots.textContent = store.menus.length ? `(${store.menus.length}종)` : ''
+  const total = store.totalWeight()
   elMenuList.innerHTML = ''
   store.menus.forEach((m: MenuItem, i: number) => {
     const li = document.createElement('li')
@@ -77,6 +78,10 @@ function renderMenus(): void {
     w.className = 'w'
     w.textContent = `×${m.weight}`
 
+    const pct = document.createElement('span')
+    pct.className = 'pct'
+    pct.textContent = `${((m.weight / total) * 100).toFixed(2)}%`
+
     const stepHint = '클릭 ±1 · Ctrl+클릭 ±10 · Alt+클릭 ±100'
     const minus = iconBtn('−', busy, (e) => store.changeWeight(m.id, -clickStep(e)))
     minus.title = `칸 빼기 (${stepHint})`
@@ -86,7 +91,7 @@ function renderMenus(): void {
     del.classList.add('del')
     del.title = '이 메뉴 빼기'
 
-    li.append(dot, name, donors, w, minus, plus, del)
+    li.append(dot, name, donors, w, pct, minus, plus, del)
     elMenuList.appendChild(li)
   })
 }
@@ -408,8 +413,6 @@ $<HTMLInputElement>('#import-file').addEventListener('change', async (e) => {
 })
 
 // ---------- 설정 (설정 탭, 변경 즉시 저장) ----------
-$('#btn-settings').addEventListener('click', () => activateTab('settings'))
-
 function initSettingsInputs(): void {
   $<HTMLInputElement>('#set-reroll-cost').value = String(store.settings.rerollCost)
   $<HTMLInputElement>('#set-reroll-sec').value = String(store.settings.rerollWindowSec)
@@ -460,15 +463,9 @@ chzzk.onStatus((s, detail) => {
 })
 
 $('#btn-chzzk-login').addEventListener('click', () => {
-  chzzk.startLogin()
-})
-
-$('#btn-chzzk-connect').addEventListener('click', () => {
-  if (!chzzk.hasToken()) {
-    alert('먼저 [1) 치지직 로그인]을 진행해주세요.')
-    return
-  }
-  void chzzk.connect()
+  // 이미 로그인돼 있으면 재연결, 아니면 공식 치지직 동의 페이지로 이동
+  if (chzzk.hasToken()) void chzzk.connect()
+  else chzzk.startLogin()
 })
 
 $('#btn-chzzk-logout').addEventListener('click', () => {

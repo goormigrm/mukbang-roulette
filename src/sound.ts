@@ -7,6 +7,9 @@
 let ctx: AudioContext | null = null
 let noiseBuf: AudioBuffer | null = null
 
+// 전체 음량 배율 — 개별 게인 값에 일괄 적용
+const MASTER = 1.6
+
 function ac(): AudioContext | null {
   try {
     if (!ctx) ctx = new AudioContext()
@@ -26,7 +29,7 @@ function beep(freq: number, dur: number, type: OscillatorType, gainV: number, wh
   osc.type = type
   osc.frequency.setValueAtTime(freq, t)
   if (slideTo !== undefined) osc.frequency.exponentialRampToValueAtTime(slideTo, t + dur)
-  gain.gain.setValueAtTime(gainV, t)
+  gain.gain.setValueAtTime(gainV * MASTER, t)
   gain.gain.exponentialRampToValueAtTime(0.0001, t + dur)
   osc.connect(gain).connect(a.destination)
   osc.start(t)
@@ -50,7 +53,7 @@ function burst(when: number, dur: number, gainV: number, filterFreq: number): vo
   filter.frequency.value = filterFreq
   filter.Q.value = 0.8
   const gain = a.createGain()
-  gain.gain.setValueAtTime(gainV, t)
+  gain.gain.setValueAtTime(gainV * MASTER, t)
   gain.gain.exponentialRampToValueAtTime(0.0001, t + dur)
   src.connect(filter).connect(gain).connect(a.destination)
   src.start(t)

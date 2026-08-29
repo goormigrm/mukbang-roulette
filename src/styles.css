@@ -491,6 +491,14 @@ button {
   text-align: center;
 }
 
+.menu-item .pct {
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .icon-btn {
   width: 26px;
   height: 26px;

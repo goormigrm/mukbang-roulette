@@ -60,7 +60,7 @@
               <button type="submit" class="btn-small">추가</button>
             </form>
             <ul id="menu-list" class="menu-list"></ul>
-            <button id="btn-clear" class="btn-ghost small">🧹 전체 비우기</button>
+            <p class="hint">칸 조절: 클릭 ±1 · Ctrl+클릭 ±10 · Alt+클릭 ±100</p>
           </div>
 
           <div class="card frame">
@@ -103,7 +103,26 @@
           <label>1칸당 금액 (원) <input id="set-won-per-slot" type="number" step="500" min="500" /></label>
           <label class="check"><input id="set-sound" type="checkbox" /> 효과음 켜기</label>
         </fieldset>
-        <div id="chzzk-section"></div>
+        <fieldset>
+          <legend>치지직 연동</legend>
+          <label>Client ID <input id="set-client-id" type="text" autocomplete="off" /></label>
+          <label>Client Secret <input id="set-client-secret" type="password" autocomplete="off" /></label>
+          <label>프록시 URL <input id="set-proxy-url" type="text" placeholder="https://xxx.workers.dev" /></label>
+          <p class="hint">
+            개발자센터(developers.chzzk.naver.com)에서 애플리케이션 등록 후 발급받아 입력하세요. 로그인 리디렉션 URI에
+            <code id="redirect-uri-hint"></code> 를 등록해야 합니다. 브라우저 보안(CORS) 때문에 프록시 URL이 필요합니다
+            — 저장소의 <code>proxy/worker.js</code>를 Cloudflare Workers에 배포하고 그 주소를 입력하세요.
+          </p>
+          <div class="row">
+            <button type="button" id="btn-chzzk-login" class="btn-small">1) 치지직 로그인</button>
+            <button type="button" id="btn-chzzk-connect" class="btn-small">2) 연결</button>
+            <button type="button" id="btn-chzzk-logout" class="btn-small">연결 해제·로그아웃</button>
+          </div>
+        </fieldset>
+        <fieldset class="danger-zone">
+          <legend>⚠ 위험 구역</legend>
+          <button type="button" id="btn-clear" class="btn-ghost small">🧹 룰렛 전체 비우기 (기록은 유지)</button>
+        </fieldset>
         <div class="row end">
           <button value="cancel" class="btn-ghost">닫기</button>
           <button id="btn-save-settings" value="save" class="btn-primary small">저장</button>

@@ -1,12 +1,11 @@
 import './styles.css'
 import { store } from './state'
 import type { MenuItem, Round } from './state'
-import { RouletteWheel } from './roulette'
+import { RouletteWheel, segColor } from './roulette'
 import * as sound from './sound'
+import * as chzzk from './chzzk'
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string): T => document.querySelector(sel) as T
-
-const DOT_COLORS = ['#C8102E', '#1C1210', '#E8433F', '#A8721C']
 
 // ---------- 룰렛 ----------
 const wheel = new RouletteWheel(
@@ -53,7 +52,7 @@ function renderMenus(): void {
 
     const dot = document.createElement('span')
     dot.className = 'dot'
-    dot.style.background = DOT_COLORS[i % DOT_COLORS.length]
+    dot.style.background = segColor(i)
 
     const name = document.createElement('span')
     name.className = 'name'
@@ -69,8 +68,11 @@ function renderMenus(): void {
     w.className = 'w'
     w.textContent = `×${m.weight}`
 
-    const minus = iconBtn('−', busy, () => store.changeWeight(m.id, -1))
-    const plus = iconBtn('+', busy, () => store.changeWeight(m.id, +1))
+    const stepHint = '클릭 ±1 · Ctrl+클릭 ±10 · Alt+클릭 ±100'
+    const minus = iconBtn('−', busy, (e) => store.changeWeight(m.id, -clickStep(e)))
+    minus.title = `칸 빼기 (${stepHint})`
+    const plus = iconBtn('+', busy, (e) => store.changeWeight(m.id, +clickStep(e)))
+    plus.title = `칸 더하기 (${stepHint})`
     const del = iconBtn('✕', busy, () => store.removeMenu(m.id))
     del.classList.add('del')
     del.title = '이 메뉴 빼기'
@@ -80,7 +82,14 @@ function renderMenus(): void {
   })
 }
 
-function iconBtn(label: string, disabled: boolean, onClick: () => void): HTMLButtonElement {
+// Ctrl+클릭 = 10칸, Alt+클릭 = 100칸 단위로 조절
+function clickStep(e: MouseEvent): number {
+  if (e.altKey) return 100
+  if (e.ctrlKey) return 10
+  return 1
+}
+
+function iconBtn(label: string, disabled: boolean, onClick: (e: MouseEvent) => void): HTMLButtonElement {
   const b = document.createElement('button')
   b.className = 'icon-btn'
   b.type = 'button'
@@ -168,9 +177,12 @@ function renderStatus(): void {
         <div class="timer-track"><div class="timer-fill" id="timer-fill" style="width:${pct}%"></div></div>`
       break
     }
-    case 'armed':
-      html = `<div class="big armed-banner">🔄 리롤 가능! ${escapeHtml(store.rerollBy ?? '')}님의 리롤권 — [리롤] 버튼을 누르세요</div>`
+    case 'armed': {
+      const users = store.rerollUsers.slice(-3).map(escapeHtml).join(', ')
+      const more = store.rerollUsers.length > 3 ? ' 외' : ''
+      html = `<div class="big armed-banner">🔄 리롤권 ×${store.rerollCredits} 보유! (${users}${more}님 후원) — [리롤] 버튼을 누르세요. 마지막 리롤 결과가 최종입니다</div>`
       break
+    }
   }
   elStatusBar.innerHTML = html
 }
@@ -178,6 +190,7 @@ function renderStatus(): void {
 function renderButtons(): void {
   btnSpin.disabled = !(store.phase === 'collect' && store.menus.length >= 2)
   btnReroll.disabled = store.phase !== 'armed'
+  btnReroll.textContent = store.rerollCredits > 0 ? `🔄 리롤 ×${store.rerollCredits}` : '🔄 리롤'
   btnConfirm.hidden = !(store.phase === 'window' || store.phase === 'armed')
 }
 
@@ -233,7 +246,10 @@ btnPause.addEventListener('click', () => store.togglePaused())
 
 $('#btn-clear').addEventListener('click', () => {
   if (store.phase === 'spinning') return
-  if (confirm('후보 목록을 전부 비울까요? (기록 탭의 지난 라운드는 유지됩니다)')) store.clearMenus()
+  if (confirm('후보 목록을 전부 비울까요? (기록 탭의 지난 라운드는 유지됩니다)')) {
+    store.clearMenus()
+    modal.close('cancel')
+  }
 })
 
 $<HTMLFormElement>('#manual-add').addEventListener('submit', (e) => {
@@ -304,22 +320,82 @@ $('#btn-settings').addEventListener('click', () => {
   $<HTMLInputElement>('#set-min-amount').value = String(store.settings.minAmount)
   $<HTMLInputElement>('#set-won-per-slot').value = String(store.settings.wonPerSlot)
   $<HTMLInputElement>('#set-sound').checked = store.settings.sound
+  $<HTMLInputElement>('#set-client-id').value = store.settings.clientId
+  $<HTMLInputElement>('#set-client-secret').value = store.settings.clientSecret
+  $<HTMLInputElement>('#set-proxy-url').value = store.settings.proxyUrl
   modal.showModal()
 })
 
-modal.addEventListener('close', () => {
-  if (modal.returnValue !== 'save') return
+function saveSettingsInputs(): void {
   store.updateSettings({
     rerollCost: Math.max(1000, Number($<HTMLInputElement>('#set-reroll-cost').value) || 20000),
     rerollWindowSec: Math.min(600, Math.max(5, Number($<HTMLInputElement>('#set-reroll-sec').value) || 60)),
     minAmount: Math.max(0, Number($<HTMLInputElement>('#set-min-amount').value) || 1000),
     wonPerSlot: Math.max(500, Number($<HTMLInputElement>('#set-won-per-slot').value) || 1000),
     sound: $<HTMLInputElement>('#set-sound').checked,
+    clientId: $<HTMLInputElement>('#set-client-id').value.trim(),
+    clientSecret: $<HTMLInputElement>('#set-client-secret').value.trim(),
+    proxyUrl: $<HTMLInputElement>('#set-proxy-url').value.trim(),
   })
+}
+
+modal.addEventListener('close', () => {
+  if (modal.returnValue === 'save') saveSettingsInputs()
+})
+
+// ---------- 치지직 연동 ----------
+const connBadge = $('#conn-badge')
+chzzk.onStatus((s, detail) => {
+  connBadge.classList.remove('badge-off', 'badge-on', 'badge-err')
+  switch (s) {
+    case 'on':
+      connBadge.classList.add('badge-on')
+      connBadge.textContent = '🟢 치지직 수신 중'
+      break
+    case 'connecting':
+      connBadge.classList.add('badge-off')
+      connBadge.textContent = '⏳ 연결 중...'
+      break
+    case 'error':
+      connBadge.classList.add('badge-err')
+      connBadge.textContent = '⚠ 연결 오류'
+      if (detail) store.addFeed('info', `⚠ 치지직: ${detail}`)
+      store.emitChange()
+      break
+    default:
+      connBadge.classList.add('badge-off')
+      connBadge.textContent = '치지직 미연결'
+  }
+  connBadge.title = detail ?? ''
+})
+
+$('#redirect-uri-hint').textContent = chzzk.redirectUri()
+
+$('#btn-chzzk-login').addEventListener('click', () => {
+  saveSettingsInputs() // 로그인 페이지로 이동하기 전에 입력값 보존
+  chzzk.startLogin()
+})
+
+$('#btn-chzzk-connect').addEventListener('click', () => {
+  saveSettingsInputs()
+  if (!chzzk.hasToken()) {
+    alert('먼저 [1) 치지직 로그인]을 진행해주세요.')
+    return
+  }
+  modal.close('cancel')
+  void chzzk.connect()
+})
+
+$('#btn-chzzk-logout').addEventListener('click', () => {
+  chzzk.logout()
 })
 
 // ---------- 시작 ----------
 renderAll()
+void (async () => {
+  const loggedInNow = await chzzk.handleOAuthRedirect()
+  if (loggedInNow || (chzzk.hasToken() && store.settings.clientId)) void chzzk.connect()
+})()
 
 // 콘솔 디버깅용
 ;(window as unknown as Record<string, unknown>).__store = store

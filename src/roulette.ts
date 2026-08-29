@@ -5,8 +5,16 @@ import type { MenuItem } from './state'
 const TAU = Math.PI * 2
 const POINTER_ANGLE = -Math.PI / 2 // 12시 방향
 
-const SEG_COLORS = ['#C8102E', '#1C1210', '#E8433F', '#A8721C']
-const TEXT_COLOR = '#FFF8F0'
+const TEXT_COLOR = '#4a2c1a' // 파스텔 배경 위에서 잘 읽히는 진갈색
+
+// 메뉴가 100개 가까이 되어도 인접 칸이 구분되도록 황금각(137.5°)으로 색상환을 순회하되,
+// 음식과 어울리는 부드러운 파스텔(마카롱) 톤으로 만든다
+export function segColor(i: number): string {
+  const hue = (i * 137.508) % 360
+  const sat = 52 + (i % 3) * 10 // 52 / 62 / 72%
+  const light = 68 + (i % 4) * 4 // 68 / 72 / 76 / 80%
+  return `hsl(${hue.toFixed(1)}, ${sat}%, ${light}%)`
+}
 
 function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3)
@@ -97,9 +105,7 @@ export class RouletteWheel {
     const segs = this.segmentAngles()
     for (let i = 0; i < items.length; i++) {
       const { start, end } = segs[i]
-      let color = SEG_COLORS[i % SEG_COLORS.length]
-      // 마지막 칸이 첫 칸과 같은 색으로 맞닿는 경우 보정
-      if (i === items.length - 1 && items.length > 1 && color === SEG_COLORS[0]) color = SEG_COLORS[1]
+      const color = segColor(i)
 
       ctx.beginPath()
       ctx.moveTo(cx, cy)

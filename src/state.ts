@@ -25,6 +25,7 @@ export interface Settings {
   sound: boolean
   clientId: string
   clientSecret: string
+  proxyUrl: string
 }
 
 export interface FeedEntry {
@@ -49,6 +50,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sound: true,
   clientId: '',
   clientSecret: '',
+  proxyUrl: '',
 }
 
 const LS_SETTINGS = 'mr:settings'
@@ -68,7 +70,9 @@ export class Store {
   paused = false // 도네이션 반영 일시정지
   winner: MenuItem | null = null
   confirmedWinner: string | null = null
-  rerollBy: string | null = null
+  /** 사용 가능한 리롤권 수 (단일 도네 ≥ 리롤비용 1건당 1개 누적) */
+  rerollCredits = 0
+  rerollUsers: string[] = []
   rerollCount = 0
   windowRemainMs = 0
 
@@ -92,6 +96,10 @@ export class Store {
   }
   private emit(ev: EventName, arg?: unknown): void {
     this.listeners.get(ev)?.forEach((fn) => fn(arg))
+  }
+  /** 외부 모듈이 피드만 추가한 뒤 리렌더를 요청할 때 사용 */
+  emitChange(): void {
+    this.emit('change')
   }
 
   // ---- 영속화 ----
@@ -196,47 +204,49 @@ export class Store {
     if (this.seen.has(d.id)) return
     this.seen.add(d.id)
     if (this.seen.size > 1000) this.seen.delete(this.seen.values().next().value as string)
+    this.routeDonation(d)
+    this.changed()
+  }
 
+  private routeDonation(d: DonationInput): void {
     const won = d.amount.toLocaleString('ko-KR')
 
     if (d.isVideo) {
       this.addFeed('skip', `🎬 [${d.nick}] ${won}원 영상 도네 — 규칙상 제외`)
-      this.changed()
       return
     }
 
-    // 리롤 판정: 리롤 대기 중 + 단일 도네 금액 ≥ 리롤 비용 (일시정지와 무관하게 동작)
-    if (this.phase === 'window' && d.amount >= this.settings.rerollCost) {
-      this.stopWindowTimer()
-      this.phase = 'armed'
-      this.rerollBy = d.nick
-      this.addFeed('reroll', `🔄 [${d.nick}] ${won}원 — 리롤권 획득!`)
+    // 리롤 판정: 리롤 대기/리롤 가능 중 + 단일 도네 금액 ≥ 리롤 비용 → 리롤권 1개 누적
+    // (일시정지와 무관하게 동작)
+    if ((this.phase === 'window' || this.phase === 'armed') && d.amount >= this.settings.rerollCost) {
+      this.rerollCredits++
+      this.rerollUsers.push(d.nick)
+      if (this.phase === 'window') {
+        this.stopWindowTimer()
+        this.phase = 'armed'
+      }
+      this.addFeed('reroll', `🔄 [${d.nick}] ${won}원 — 리롤권 +1 (보유 ${this.rerollCredits}개)`)
       this.emit('armed', d.nick)
-      this.changed()
       return
     }
 
     if (this.paused) {
       this.addFeed('skip', `⏸ [${d.nick}] ${won}원 "${d.message}" — 일시정지 중, 반영 안 됨`)
-      this.changed()
       return
     }
 
     if (d.amount < this.settings.minAmount) {
       this.addFeed('skip', `[${d.nick}] ${won}원 — 최소 금액(${this.settings.minAmount.toLocaleString('ko-KR')}원) 미만`)
-      this.changed()
       return
     }
 
     if (this.phase === 'spinning') {
       this.pendingDonations.push(d)
       this.addFeed('info', `⏳ [${d.nick}] ${won}원 — 스핀 종료 후 반영 예정`)
-      this.changed()
       return
     }
 
     this.applyDonation(d)
-    this.changed()
   }
 
   private applyDonation(d: DonationInput): void {
@@ -261,9 +271,12 @@ export class Store {
     if (this.phase !== 'collect' && this.phase !== 'armed') return null
 
     if (this.phase === 'armed') {
+      this.rerollCredits--
       this.rerollCount++
-      this.addFeed('reroll', `🔄 리롤! (${this.rerollBy}님 후원) — 직전 당첨 메뉴 포함하여 다시 돌립니다`)
-      this.rerollBy = null
+      this.addFeed(
+        'reroll',
+        `🔄 리롤 사용! (남은 리롤권 ${this.rerollCredits}개) — 직전 당첨 메뉴 포함하여 다시 돌립니다`,
+      )
     }
 
     const total = this.totalWeight()
@@ -283,20 +296,24 @@ export class Store {
     return { index }
   }
 
-  /** 스핀 애니메이션 종료 → 당첨 확정, 리롤 대기 시작 */
+  /** 스핀 애니메이션 종료 → 당첨 발표. 남은 리롤권이 있으면 즉시 리롤 가능 상태 유지 */
   finishSpin(): void {
     if (this.phase !== 'spinning' || !this.pendingWinner) return
     this.winner = this.pendingWinner
     this.pendingWinner = null
-    this.phase = 'window'
     this.addFeed('win', `🎉 당첨: "${this.winner.name}"`)
     this.emit('winner', this.winner)
-    this.startWindowTimer()
+    if (this.rerollCredits > 0) {
+      this.phase = 'armed'
+    } else {
+      this.phase = 'window'
+      this.startWindowTimer()
+    }
 
-    // 스핀 중 대기열 반영
+    // 스핀 중 대기열 반영 (규칙 엔진을 다시 통과시켜 리롤권 판정도 받게 한다)
     const queued = this.pendingDonations
     this.pendingDonations = []
-    for (const d of queued) this.applyDonation(d)
+    for (const d of queued) this.routeDonation(d)
     this.changed()
   }
 
@@ -327,6 +344,9 @@ export class Store {
     this.stopWindowTimer()
     const winnerName = this.winner?.name ?? '?'
     this.confirmedWinner = winnerName
+    if (this.rerollCredits > 0) {
+      this.addFeed('info', `남은 리롤권 ${this.rerollCredits}개는 확정과 함께 소멸됩니다`)
+    }
     this.addFeed('win', `✅ 최종 확정: "${winnerName}"`)
 
     this.history.unshift({
@@ -340,7 +360,8 @@ export class Store {
 
     this.phase = 'collect'
     this.rerollCount = 0
-    this.rerollBy = null
+    this.rerollCredits = 0
+    this.rerollUsers = []
     this.changed()
   }
 

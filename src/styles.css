@@ -675,3 +675,11 @@ dialog::backdrop {
   color: var(--muted);
   word-break: break-all;
 }
+
+.settings fieldset.danger-zone {
+  border-color: var(--red-deep);
+}
+
+.danger-zone legend {
+  color: var(--red-deep);
+}

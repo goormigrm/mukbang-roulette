@@ -18,8 +18,8 @@ export interface Round {
 }
 
 // collect(모집) → spinning(회전) → decision(당첨 발표, 스트리머 선택 대기)
-//   → window(리롤 도네 접수, 타이머) → armed(리롤권 보유) → 확정 시 collect로
-export type Phase = 'collect' | 'spinning' | 'decision' | 'window' | 'armed'
+//   → window(리롤 도네 접수, 타이머는 끝까지 흐르고 그동안 리롤권이 계속 쌓임) → 확정 시 collect로
+export type Phase = 'collect' | 'spinning' | 'decision' | 'window'
 
 export interface Settings {
   rerollCost: number
@@ -227,31 +227,26 @@ export class Store {
       return
     }
 
-    // 리롤 판정: 단일 도네 금액 ≥ 이번 회차 리롤 비용 → 리롤권 1개 누적 (일시정지와 무관하게 동작)
-    // 접수 중(window)·리롤권 보유(armed)뿐 아니라, 접수가 마감된 뒤(decision + windowOpened)에도
-    // 인정한다 — 치지직 연동 지연으로 몇 초 늦게 도착하는 도네 대비
+    // 일시정지 중에는 메뉴 추가뿐 아니라 리롤권 적립도 하지 않는다
+    if (this.paused) {
+      this.addFeed('skip', `⏸ [${d.nick}] ${won}원 "${d.message}" — 일시정지 중, 반영 안 됨`)
+      return
+    }
+
+    // 리롤 판정: 단일 도네 금액 ≥ 이번 회차 리롤 비용 → 리롤권 1개 누적.
+    // 타이머는 멈추지 않고 끝까지 흐른다 — 그동안 여러 명의 리롤권이 계속 쌓일 수 있다.
+    // 접수 마감 뒤(decision + windowOpened)에도 확정 전까지 인정 (치지직 연동 지연 대비).
     const rerollEligible =
-      this.phase === 'window' ||
-      this.phase === 'armed' ||
-      (this.phase === 'decision' && this.windowOpened)
+      this.phase === 'window' || (this.phase === 'decision' && this.windowOpened)
     if (rerollEligible && d.amount >= this.effectiveRerollCost()) {
       const late = this.phase === 'decision'
       this.rerollCredits++
       this.rerollUsers.push(d.nick)
-      if (this.phase !== 'armed') {
-        this.stopWindowTimer()
-        this.phase = 'armed'
-      }
       this.addFeed(
         'reroll',
         `🔄 [${d.nick}] ${won}원 — 리롤권 +1 (보유 ${this.rerollCredits}개)${late ? ' · 마감 후 도착분 인정' : ''}`,
       )
       this.emit('armed', d.nick)
-      return
-    }
-
-    if (this.paused) {
-      this.addFeed('skip', `⏸ [${d.nick}] ${won}원 "${d.message}" — 일시정지 중, 반영 안 됨`)
       return
     }
 
@@ -292,7 +287,10 @@ export class Store {
     if (this.menus.length < 2 || this.phase === 'spinning') return false
 
     if (useCredit) {
-      if (this.phase !== 'armed' || this.rerollCredits < 1) return false
+      if (this.rerollCredits < 1 || (this.phase !== 'decision' && this.phase !== 'window')) {
+        return false
+      }
+      this.stopWindowTimer()
       this.rerollCredits--
       this.rerollCount++
       this.addFeed(
@@ -338,8 +336,8 @@ export class Store {
     this.pendingWinner = null
     this.addFeed('win', `🎉 당첨: "${this.winner.name}"`)
     this.emit('winner', this.winner)
-    this.windowOpened = false // 새 결과 — 접수 이력 초기화 (리롤 비용은 확정 전까지 유지)
-    this.phase = this.rerollCredits > 0 ? 'armed' : 'decision'
+    this.windowOpened = false // 새 결과 — 접수 이력 초기화 (리롤 비용·잔여 리롤권은 확정 전까지 유지)
+    this.phase = 'decision'
 
     // 스핀 중 대기열 반영 (규칙 엔진을 다시 통과시켜 리롤권 판정도 받게 한다)
     const queued = this.pendingDonations
@@ -395,9 +393,9 @@ export class Store {
     }
   }
 
-  /** 결과 확정 (확정 버튼 또는 시간 만료) → 라운드 기록 저장 */
+  /** 결과 확정 (확정 버튼) → 라운드 기록 저장 */
   confirmResult(): void {
-    if (this.phase !== 'decision' && this.phase !== 'window' && this.phase !== 'armed') return
+    if (this.phase !== 'decision' && this.phase !== 'window') return
     this.stopWindowTimer()
     const winnerName = this.winner?.name ?? '?'
     this.confirmedWinner = winnerName

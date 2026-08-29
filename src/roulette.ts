@@ -1,23 +1,34 @@
-// Canvas 룰렛 원판.
-// 참고한 "돌려돌려 돌림판" 확장프로그램과 같은 방식:
-//   [돌리기] → 정지 버튼을 누를 때까지 일정 속도로 계속 회전
-//   [정지]   → 그 순간 당첨을 확정하고, 5~8초간 긴장감 있게 감속하며 당첨 칸에 멈춤
-// 감속 시작 속도와 easeOutCubic의 초기 기울기를 일치시켜 끊김 없이 이어진다.
+// Canvas 룰렛 원판 — 크롬 확장 "돌려돌려 돌림판" 스타일:
+//   · 선명한 원색 평면 원판 + 얇은 진회색 외곽선 (장식 링·중앙 허브 없음)
+//   · 포인터는 원판 밖 상단에서 아래를 향하는 검은 삼각형
+//   · 포인터 위에 "지금 가리키는 항목 이름"을 크게 실시간 표시 (돌아가는 동안 휙휙 바뀜)
+//   · 원판 라벨은 이름만 — 흰 글씨 + 어두운 테두리 (칸 수는 옆 목록에서 확인)
+// 동작: [돌리기] → 정지 버튼을 누를 때까지 계속 회전, [정지] 순간 당첨 확정 후
+//       현재 속도에서 이어지는 감속 곡선으로 5.5~8초간 긴장감 있게 착지.
 
 import type { MenuItem } from './state'
 
 const TAU = Math.PI * 2
 const POINTER_ANGLE = -Math.PI / 2 // 12시 방향
 
-const TEXT_COLOR = '#4a2c1a' // 파스텔 배경 위에서 잘 읽히는 진갈색
+// 확장프로그램과 같은 계열의 선명한 원색 팔레트 (Material 계열, 인접 칸 구분 뚜렷)
+const PALETTE = [
+  '#00BCD4', // cyan
+  '#CDDC39', // lime
+  '#FF9800', // orange
+  '#607D8B', // blue gray
+  '#9C27B0', // purple
+  '#2196F3', // blue
+  '#E91E63', // pink
+  '#8BC34A', // light green
+  '#FF5722', // deep orange
+  '#3F51B5', // indigo
+  '#FFC107', // amber
+  '#009688', // teal
+]
 
-// 메뉴가 100개 가까이 되어도 인접 칸이 구분되도록 황금각(137.5°)으로 색상환을 순회하되,
-// 음식과 어울리는 부드러운 파스텔(마카롱) 톤으로 만든다
 export function segColor(i: number): string {
-  const hue = (i * 137.508) % 360
-  const sat = 52 + (i % 3) * 10 // 52 / 62 / 72%
-  const light = 68 + (i % 4) * 4 // 68 / 72 / 76 / 80%
-  return `hsl(${hue.toFixed(1)}, ${sat}%, ${light}%)`
+  return PALETTE[i % PALETTE.length]
 }
 
 function easeOutCubic(t: number): number {
@@ -26,8 +37,8 @@ function easeOutCubic(t: number): number {
 
 type SpinMode = 'idle' | 'free' | 'stopping'
 
-const MAX_SPEED = TAU * 1.9 // 자유 회전 속도 (rad/s)
-const ACCEL_MS = 900 // 최고 속도 도달 시간
+const MAX_SPEED = TAU * 2.2 // 자유 회전 속도 (rad/s)
+const ACCEL_MS = 800 // 최고 속도 도달 시간
 
 export class RouletteWheel {
   private rotation = Math.random() * TAU
@@ -72,7 +83,7 @@ export class RouletteWheel {
 
   private fitCanvas(): void {
     const dpr = window.devicePixelRatio || 1
-    const size = Math.min(this.canvas.clientWidth || 560, 720)
+    const size = Math.min(this.canvas.clientWidth || 560, 760)
     this.canvas.width = size * dpr
     this.canvas.height = size * dpr
     this.draw()
@@ -101,27 +112,21 @@ export class RouletteWheel {
     ctx.scale(dpr, dpr)
     ctx.clearRect(0, 0, size, size)
 
+    // 상단에 라이브 라벨 + 포인터 공간을 확보하고 원판은 그 아래에 그린다
+    const pad = Math.max(58, size * 0.13)
     const cx = size / 2
-    const cy = size / 2
-    const R = size / 2 - 14
-
-    // 바깥 장식 링 (금색 + 먹색 이중 테두리)
-    ctx.beginPath()
-    ctx.arc(cx, cy, R + 10, 0, TAU)
-    ctx.fillStyle = '#1C1210'
-    ctx.fill()
-    ctx.beginPath()
-    ctx.arc(cx, cy, R + 6, 0, TAU)
-    ctx.strokeStyle = '#D9A441'
-    ctx.lineWidth = 3
-    ctx.stroke()
+    const cy = (size + pad) / 2
+    const R = (size - pad) / 2 - 8
 
     const items = this.getItems()
     if (items.length === 0) {
       ctx.beginPath()
       ctx.arc(cx, cy, R, 0, TAU)
-      ctx.fillStyle = '#FFF3E8'
+      ctx.fillStyle = '#F4EFE8'
       ctx.fill()
+      ctx.strokeStyle = '#37474F'
+      ctx.lineWidth = 3
+      ctx.stroke()
       ctx.fillStyle = '#9A8578'
       ctx.font = `600 ${Math.max(15, size * 0.032)}px "Noto Sans KR", sans-serif`
       ctx.textAlign = 'center'
@@ -134,20 +139,29 @@ export class RouletteWheel {
     const segs = this.segmentAngles()
     for (let i = 0; i < items.length; i++) {
       const { start, end } = segs[i]
+      let color = segColor(i)
+      // 마지막 칸이 첫 칸과 같은 색으로 맞닿는 경우 보정
+      if (i === items.length - 1 && items.length > 1 && color === segColor(0)) {
+        color = PALETTE[(i + 5) % PALETTE.length]
+      }
       ctx.beginPath()
       ctx.moveTo(cx, cy)
       ctx.arc(cx, cy, R, start + this.rotation, end + this.rotation)
       ctx.closePath()
-      ctx.fillStyle = segColor(i)
+      ctx.fillStyle = color
       ctx.fill()
-      ctx.strokeStyle = 'rgba(255,255,255,0.65)'
-      ctx.lineWidth = 1.5
-      ctx.stroke()
     }
 
-    // 라벨
-    const fontSize = Math.max(11, Math.min(size * 0.036, (size * 2.2) / Math.max(8, items.length)))
-    ctx.font = `700 ${fontSize}px "Noto Sans KR", sans-serif`
+    // 원판 외곽선 (확장처럼 얇은 진회색 한 겹)
+    ctx.beginPath()
+    ctx.arc(cx, cy, R, 0, TAU)
+    ctx.strokeStyle = '#37474F'
+    ctx.lineWidth = 3
+    ctx.stroke()
+
+    // 라벨 — 이름만, 흰 글씨 + 어두운 테두리 (확장 스타일)
+    const fontSize = Math.max(12, Math.min(size * 0.042, (size * 2.4) / Math.max(8, items.length)))
+    ctx.font = `800 ${fontSize}px "Noto Sans KR", sans-serif`
     ctx.textBaseline = 'middle'
     for (let i = 0; i < items.length; i++) {
       const { start, end } = segs[i]
@@ -156,46 +170,40 @@ export class RouletteWheel {
       ctx.translate(cx, cy)
       ctx.rotate(mid)
       ctx.textAlign = 'right'
-      ctx.fillStyle = TEXT_COLOR
-      const label = items[i].weight > 1 ? `${items[i].name} ×${items[i].weight}` : items[i].name
-      ctx.fillText(label, R * 0.92, 0, R * 0.62)
+      ctx.lineJoin = 'round'
+      ctx.lineWidth = Math.max(2.5, fontSize * 0.18)
+      ctx.strokeStyle = 'rgba(45, 45, 45, 0.8)'
+      ctx.strokeText(items[i].name, R * 0.94, 0, R * 0.6)
+      ctx.fillStyle = '#FFFFFF'
+      ctx.fillText(items[i].name, R * 0.94, 0, R * 0.6)
       ctx.restore()
     }
 
-    // 중앙 허브
-    const hub = Math.max(34, size * 0.11)
+    // 현재 포인터가 가리키는 항목 이름 (포인터 위 실시간 표시 — 확장의 핵심 연출)
+    const current = items[this.indexAtPointer()]
+    const rimTop = cy - R
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'alphabetic'
+    ctx.font = `900 ${Math.max(20, size * 0.05)}px "Noto Sans KR", sans-serif`
+    ctx.fillStyle = '#0E0808'
+    ctx.fillText(current.name, cx, rimTop - 30, size * 0.8)
+
+    // 포인터 — 원판 밖 상단에서 아래를 향하는 검은 삼각형
     ctx.beginPath()
-    ctx.arc(cx, cy, hub, 0, TAU)
+    ctx.moveTo(cx - 11, rimTop - 22)
+    ctx.lineTo(cx + 11, rimTop - 22)
+    ctx.lineTo(cx, rimTop + 4)
+    ctx.closePath()
     ctx.fillStyle = '#1C1210'
     ctx.fill()
-    ctx.beginPath()
-    ctx.arc(cx, cy, hub - 4, 0, TAU)
-    ctx.strokeStyle = '#D9A441'
-    ctx.lineWidth = 2
-    ctx.stroke()
-    ctx.fillStyle = '#FFF8F0'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.font = `${Math.max(13, hub * 0.42)}px "Nanum Brush Script", cursive`
-    ctx.fillText('먹방', cx, cy - hub * 0.24)
-    ctx.fillText('룰렛', cx, cy + hub * 0.26)
-
-    // 포인터 (12시 방향, 아래를 가리키는 삼각형)
-    ctx.beginPath()
-    ctx.moveTo(cx - 14, cy - R - 12)
-    ctx.lineTo(cx + 14, cy - R - 12)
-    ctx.lineTo(cx, cy - R + 18)
-    ctx.closePath()
-    ctx.fillStyle = '#D9A441'
-    ctx.fill()
-    ctx.strokeStyle = '#1C1210'
-    ctx.lineWidth = 2
+    ctx.strokeStyle = '#FFFFFF'
+    ctx.lineWidth = 1.5
     ctx.stroke()
 
     ctx.restore()
   }
 
-  /** 현재 포인터 아래에 있는 칸 인덱스 (틱 사운드용) */
+  /** 현재 포인터 아래에 있는 칸 인덱스 */
   private indexAtPointer(): number {
     const segs = this.segmentAngles()
     const a = (((POINTER_ANGLE - this.rotation) % TAU) + TAU) % TAU
@@ -238,7 +246,7 @@ export class RouletteWheel {
     // 당첨 칸 내부 무작위 지점(가장자리 8% 제외)
     const { start, end } = segs[winnerIndex]
     const target = start + (end - start) * (0.08 + Math.random() * 0.84)
-    let landing = ((POINTER_ANGLE - target) % TAU) + TAU // 그 지점이 포인터에 오는 회전값(mod TAU)
+    const landing = ((POINTER_ANGLE - target) % TAU) + TAU // 그 지점이 포인터에 오는 회전값(mod TAU)
 
     const startRot = this.rotation
     // idealRange에 가장 가까운 바퀴 수로 착지점을 맞춘다
@@ -297,7 +305,7 @@ export class RouletteWheel {
 
     this.draw()
     const idx = this.indexAtPointer()
-    if (idx !== prevIdx && now - this.lastTickAt > 45) {
+    if (idx !== prevIdx && now - this.lastTickAt > 40) {
       this.lastTickAt = now
       const progress =
         this.mode === 'stopping' ? Math.min(1, (now - this.stopStartAt) / this.stopDuration) : 0

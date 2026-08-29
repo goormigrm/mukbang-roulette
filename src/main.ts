@@ -180,23 +180,27 @@ function renderStatus(): void {
         ? `<div class="big reroll-note">두구두구두구... 🥁</div>`
         : `<div class="big">🌀 돌아가는 중 — [🛑 정지!]를 누르면 멈춥니다</div>`
       break
-    case 'decision':
+    case 'decision': {
+      const creditNote =
+        store.rerollCredits > 0
+          ? ` <b class="armed-banner">🔄 리롤권 ×${store.rerollCredits} 보유 — 마지막 리롤이 최종!</b>`
+          : ''
       html = store.windowOpened
-        ? `<div class="big reroll-note">⏱ 접수 마감 — 늦게 도착한 ${cost}원 이상 도네는 확정 전까지 리롤권으로 인정됩니다. 재접수·다시 돌리기·확정 중 선택하세요</div>`
-        : `<div class="big">🎉 당첨! [🔔 리롤 도네 받기] · [🔁 다시 돌리기] · [✅ 결과 확정] 중 선택하세요</div>`
+        ? `<div class="big reroll-note">⏱ 접수 마감 — 늦게 도착한 ${cost}원 이상 도네도 확정 전까지 인정됩니다.${creditNote}</div>`
+        : `<div class="big">🎉 당첨! [🔔 리롤 도네 받기] · [🔁 다시 돌리기] · [✅ 결과 확정] 중 선택하세요${creditNote}</div>`
       break
+    }
     case 'window': {
       const remain = Math.ceil(store.windowRemainMs / 1000)
       const pct = (store.windowRemainMs / (s.rerollWindowSec * 1000)) * 100
+      const creditNote =
+        store.rerollCredits > 0
+          ? `<div class="armed-banner">🔄 리롤권 ×${store.rerollCredits} 누적! 시간이 끝날 때까지 계속 쌓입니다</div>`
+          : ''
       html = `
-        <div class="big reroll-note">⏱ <span id="remain-sec">${remain}</span>초 안에 단일 도네 ${cost}원 이상이면 리롤!</div>
-        <div class="timer-track"><div class="timer-fill" id="timer-fill" style="width:${pct}%"></div></div>`
-      break
-    }
-    case 'armed': {
-      const users = store.rerollUsers.slice(-3).map(escapeHtml).join(', ')
-      const more = store.rerollUsers.length > 3 ? ' 외' : ''
-      html = `<div class="big armed-banner">🔄 리롤권 ×${store.rerollCredits} 보유! (${users}${more}님 후원) — [리롤] 버튼을 누르세요. 마지막 리롤 결과가 최종입니다</div>`
+        <div class="big reroll-note">⏱ <span id="remain-sec">${remain}</span>초 안에 단일 도네 ${cost}원 이상이면 리롤권 적립!</div>
+        <div class="timer-track"><div class="timer-fill" id="timer-fill" style="width:${pct}%"></div></div>
+        ${creditNote}`
       break
     }
   }
@@ -215,15 +219,16 @@ function renderButtons(): void {
   }
   btnOpenWindow.hidden = store.phase !== 'decision'
   btnOpenWindow.textContent = store.windowOpened ? '🔔 리롤 재접수 (금액 변경)' : '🔔 리롤 도네 받기'
-  btnReroll.disabled = store.phase !== 'armed'
-  btnReroll.hidden = store.phase === 'decision'
+  btnReroll.disabled = !(
+    store.rerollCredits > 0 &&
+    (store.phase === 'decision' || store.phase === 'window')
+  )
   btnReroll.textContent = store.rerollCredits > 0 ? `🔄 리롤 ×${store.rerollCredits}` : '🔄 리롤'
-  btnConfirm.hidden = !(store.phase === 'decision' || store.phase === 'window' || store.phase === 'armed')
+  btnConfirm.hidden = !(store.phase === 'decision' || store.phase === 'window')
 }
 
 function renderOverlay(): void {
-  const showLive =
-    (store.phase === 'decision' || store.phase === 'window' || store.phase === 'armed') && store.winner
+  const showLive = (store.phase === 'decision' || store.phase === 'window') && store.winner
   const showConfirmed = store.phase === 'collect' && store.confirmedWinner
   if (showLive) {
     elWinnerName.textContent = store.winner!.name

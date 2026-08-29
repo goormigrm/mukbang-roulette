@@ -57,11 +57,22 @@ function burst(when: number, dur: number, gainV: number, filterFreq: number): vo
   src.stop(t + dur)
 }
 
-/** 룰렛 칸 넘어갈 때 틱. progress(0~1)가 커질수록(멈추기 직전일수록) 음정이 올라간다 */
+/** 룰렛 칸 넘어갈 때 틱 — 래칫(딸깍이) 느낌의 2중 레이어.
+ *  자유 회전 중엔 두 음을 빠르게 교차(따다다닥), 감속 중엔 progress(0~1)에 따라
+ *  음정과 볼륨이 점점 올라가 멈추기 직전이 가장 긴장되게 들린다 */
+let tickAlt = false
 export function tick(progress = 0): void {
-  const f = 900 + 700 * progress
-  beep(f, 0.035, 'square', 0.045 + 0.04 * progress)
-  burst(0, 0.02, 0.02 + 0.02 * progress, 3800)
+  tickAlt = !tickAlt
+  const stopping = progress > 0
+  const f = stopping ? 1000 + 900 * progress : tickAlt ? 880 : 1040
+  const g = stopping ? 0.07 + 0.07 * progress : 0.06
+  beep(f, 0.028, 'square', g) // 딸깍 본체
+  beep(f * 1.5, 0.02, 'triangle', g * 0.5) // 카랑한 상단 배음
+  burst(0, 0.016, 0.045 + 0.04 * progress, 4600) // 나무 부딪는 타격감
+  if (stopping && progress > 0.75) {
+    // 막판엔 저음 심장박동을 한 겹 더
+    beep(120 + 60 * progress, 0.06, 'sine', 0.09)
+  }
 }
 
 // ---- 리롤 카운트다운 시계 소리 ----

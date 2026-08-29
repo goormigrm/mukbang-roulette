@@ -1,4 +1,8 @@
-// Canvas 룰렛 원판: 가중치 비례 칸, 스핀 애니메이션 (결과는 시작 시점에 확정된 각도로 감속 정지)
+// Canvas 룰렛 원판.
+// 참고한 "돌려돌려 돌림판" 확장프로그램과 같은 방식:
+//   [돌리기] → 정지 버튼을 누를 때까지 일정 속도로 계속 회전
+//   [정지]   → 그 순간 당첨을 확정하고, 5~8초간 긴장감 있게 감속하며 당첨 칸에 멈춤
+// 감속 시작 속도와 easeOutCubic의 초기 기울기를 일치시켜 끊김 없이 이어진다.
 
 import type { MenuItem } from './state'
 
@@ -20,12 +24,28 @@ function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3)
 }
 
+type SpinMode = 'idle' | 'free' | 'stopping'
+
+const MAX_SPEED = TAU * 1.9 // 자유 회전 속도 (rad/s)
+const ACCEL_MS = 900 // 최고 속도 도달 시간
+
 export class RouletteWheel {
   private rotation = Math.random() * TAU
-  private spinning = false
+  private mode: SpinMode = 'idle'
   private raf = 0
   private watchdog: ReturnType<typeof setInterval> | null = null
   private lastFrameAt = 0
+
+  // free 회전 상태
+  private freeStartAt = 0
+  private lastTickAt = 0
+
+  // stopping 상태
+  private stopStartRot = 0
+  private stopEndRot = 0
+  private stopStartAt = 0
+  private stopDuration = 0
+  private onStopped: (() => void) | null = null
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -38,7 +58,15 @@ export class RouletteWheel {
   }
 
   get isSpinning(): boolean {
-    return this.spinning
+    return this.mode !== 'idle'
+  }
+
+  get isFreeSpinning(): boolean {
+    return this.mode === 'free'
+  }
+
+  get isStopping(): boolean {
+    return this.mode === 'stopping'
   }
 
   private fitCanvas(): void {
@@ -105,15 +133,13 @@ export class RouletteWheel {
     const segs = this.segmentAngles()
     for (let i = 0; i < items.length; i++) {
       const { start, end } = segs[i]
-      const color = segColor(i)
-
       ctx.beginPath()
       ctx.moveTo(cx, cy)
       ctx.arc(cx, cy, R, start + this.rotation, end + this.rotation)
       ctx.closePath()
-      ctx.fillStyle = color
+      ctx.fillStyle = segColor(i)
       ctx.fill()
-      ctx.strokeStyle = 'rgba(255,248,240,0.5)'
+      ctx.strokeStyle = 'rgba(255,255,255,0.65)'
       ctx.lineWidth = 1.5
       ctx.stroke()
     }
@@ -146,7 +172,7 @@ export class RouletteWheel {
     ctx.strokeStyle = '#D9A441'
     ctx.lineWidth = 2
     ctx.stroke()
-    ctx.fillStyle = TEXT_COLOR
+    ctx.fillStyle = '#FFF8F0'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.font = `${Math.max(13, hub * 0.42)}px "Nanum Brush Script", cursive`
@@ -178,61 +204,101 @@ export class RouletteWheel {
     return 0
   }
 
-  /** winnerIndex 칸의 중앙이 포인터에 오도록 감속 스핀 */
-  spin(winnerIndex: number, onDone: () => void): void {
-    if (this.spinning) return
+  /** 현재 자유 회전 속도 (rad/s) — 가속 구간 반영 */
+  private freeVelocity(now: number): number {
+    const k = Math.min(1, (now - this.freeStartAt) / ACCEL_MS)
+    return MAX_SPEED * (1 - Math.pow(1 - k, 2)) // easeOutQuad 가속
+  }
+
+  /** [돌리기] — 정지 버튼을 누를 때까지 계속 회전 */
+  startFreeSpin(): void {
+    if (this.mode !== 'idle') return
+    this.mode = 'free'
+    this.freeStartAt = performance.now()
+    this.lastFrameAt = this.freeStartAt
+    this.startLoop()
+  }
+
+  /**
+   * [정지] — winnerIndex 칸에 멈추도록 감속을 시작한다.
+   * 현재 회전 속도에서 이어지는 감속 곡선을 계산해 5~8초간 긴장감 있게 멈춘다.
+   */
+  requestStop(winnerIndex: number, onDone: () => void): void {
+    if (this.mode !== 'free') return
     const segs = this.segmentAngles()
     if (winnerIndex < 0 || winnerIndex >= segs.length) return
-    this.spinning = true
 
+    const now = performance.now()
+    const v = this.freeVelocity(now)
+    const duration = 5500 + Math.random() * 2500 // 5.5~8초 감속
+    // easeOutCubic의 t=0 기울기(3·range/duration)가 현재 속도 v와 같아지는 회전량
+    const idealRange = (v * duration) / 1000 / 3
+
+    // 당첨 칸 내부 무작위 지점(가장자리 8% 제외)
     const { start, end } = segs[winnerIndex]
-    // 당첨 칸 내부 무작위 지점(가장자리 5% 제외)에 멈추면 더 자연스러움
-    const span = end - start
-    const target = start + span * (0.08 + Math.random() * 0.84)
-    const startRot = ((this.rotation % TAU) + TAU) % TAU
-    const baseTurns = 6 + Math.floor(Math.random() * 3)
-    let endRot = POINTER_ANGLE - target
-    endRot = ((endRot % TAU) + TAU) % TAU
-    while (endRot < startRot) endRot += TAU
-    endRot += baseTurns * TAU
+    const target = start + (end - start) * (0.08 + Math.random() * 0.84)
+    let landing = ((POINTER_ANGLE - target) % TAU) + TAU // 그 지점이 포인터에 오는 회전값(mod TAU)
 
-    const duration = 4600 + Math.random() * 1600
-    const t0 = performance.now()
-    let lastIdx = this.indexAtPointer()
+    const startRot = this.rotation
+    // idealRange에 가장 가까운 바퀴 수로 착지점을 맞춘다
+    let range = landing - (startRot % TAU)
+    range = ((range % TAU) + TAU) % TAU
+    range += Math.max(1, Math.round((idealRange - range) / TAU)) * TAU
 
-    const finish = () => {
-      this.spinning = false
-      if (this.watchdog !== null) {
-        clearInterval(this.watchdog)
-        this.watchdog = null
-      }
-      onDone()
-    }
+    this.mode = 'stopping'
+    this.stopStartRot = startRot
+    this.stopEndRot = startRot + range
+    this.stopStartAt = now
+    this.stopDuration = duration
+    this.onStopped = onDone
+  }
 
-    const frame = (now: number) => {
-      if (!this.spinning) return
-      this.lastFrameAt = now
-      const t = Math.min(1, (now - t0) / duration)
-      this.rotation = startRot + (endRot - startRot) * easeOutCubic(t)
-      this.draw()
-      const idx = this.indexAtPointer()
-      if (idx !== lastIdx) {
-        lastIdx = idx
-        this.onSegmentCross?.()
-      }
-      if (t < 1) {
-        this.raf = requestAnimationFrame(frame)
-      } else {
-        finish()
-      }
-    }
+  private startLoop(): void {
     cancelAnimationFrame(this.raf)
+    const frame = (now: number) => {
+      if (this.mode === 'idle') return
+      this.step(now) // step()이 mode를 'idle'로 바꿀 수 있다
+      if ((this.mode as SpinMode) !== 'idle') this.raf = requestAnimationFrame(frame)
+    }
     this.raf = requestAnimationFrame(frame)
-    // 백그라운드 탭에서는 rAF가 멈추므로 워치독이 애니메이션을 이어받아 스핀을 끝까지 진행시킨다
-    this.lastFrameAt = performance.now()
-    this.watchdog = setInterval(() => {
-      const now = performance.now()
-      if (this.spinning && now - this.lastFrameAt > 300) frame(now)
-    }, 250)
+    // 백그라운드 탭에서는 rAF가 멈추므로 워치독이 이어받아 진행시킨다
+    if (this.watchdog === null) {
+      this.watchdog = setInterval(() => {
+        const now = performance.now()
+        if (this.mode !== 'idle' && now - this.lastFrameAt > 300) this.step(now)
+      }, 250)
+    }
+  }
+
+  private step(now: number): void {
+    const dt = Math.min(0.3, (now - this.lastFrameAt) / 1000)
+    this.lastFrameAt = now
+    const prevIdx = this.indexAtPointer()
+
+    if (this.mode === 'free') {
+      this.rotation += this.freeVelocity(now) * dt
+    } else if (this.mode === 'stopping') {
+      const t = Math.min(1, (now - this.stopStartAt) / this.stopDuration)
+      this.rotation = this.stopStartRot + (this.stopEndRot - this.stopStartRot) * easeOutCubic(t)
+      if (t >= 1) {
+        this.mode = 'idle'
+        if (this.watchdog !== null) {
+          clearInterval(this.watchdog)
+          this.watchdog = null
+        }
+        this.draw()
+        const cb = this.onStopped
+        this.onStopped = null
+        cb?.()
+        return
+      }
+    }
+
+    this.draw()
+    const idx = this.indexAtPointer()
+    if (idx !== prevIdx && now - this.lastTickAt > 45) {
+      this.lastTickAt = now
+      this.onSegmentCross?.()
+    }
   }
 }

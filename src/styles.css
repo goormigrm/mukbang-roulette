@@ -282,6 +282,17 @@ button {
   cursor: not-allowed;
 }
 
+.btn-primary.stop-mode {
+  background: var(--gold);
+  color: var(--ink);
+  animation: blink 0.8s infinite;
+}
+
+.btn-primary.stop-mode:disabled {
+  animation: none;
+  opacity: 0.6;
+}
+
 .btn-reroll {
   padding: 12px 26px;
   border: 2px solid var(--ink);

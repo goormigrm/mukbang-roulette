@@ -17,9 +17,17 @@ const wheel = new RouletteWheel(
 )
 
 function doSpin(): void {
-  const r = store.beginSpin()
+  if (!store.beginSpin()) return
+  wheel.startFreeSpin()
+}
+
+function doStop(): void {
+  if (!wheel.isFreeSpinning) return
+  const r = store.pickWinner()
   if (!r) return
-  wheel.spin(r.index, () => store.finishSpin())
+  wheel.requestStop(r.index, () => store.finishSpin())
+  renderStatus()
+  renderButtons()
 }
 
 // ---------- 렌더링 ----------
@@ -42,9 +50,8 @@ function renderPause(): void {
 
 function renderMenus(): void {
   const busy = store.phase === 'spinning'
-  elTotalSlots.textContent = store.menus.length
-    ? `(${store.menus.length}종 · 총 ${store.totalWeight()}칸)`
-    : ''
+  // 총 칸 수는 사실상 도네 총액이 노출되는 셈이라 표시하지 않는다
+  elTotalSlots.textContent = store.menus.length ? `(${store.menus.length}종)` : ''
   elMenuList.innerHTML = ''
   store.menus.forEach((m: MenuItem, i: number) => {
     const li = document.createElement('li')
@@ -167,7 +174,9 @@ function renderStatus(): void {
         : `<div class="muted">도네이션 ${s.wonPerSlot.toLocaleString('ko-KR')}원당 1칸 · 후보가 2개 이상이면 돌릴 수 있어요</div>`
       break
     case 'spinning':
-      html = `<div class="big">🌀 돌아가는 중...</div>`
+      html = wheel.isStopping
+        ? `<div class="big reroll-note">두구두구두구... 🥁</div>`
+        : `<div class="big">🌀 돌아가는 중 — [🛑 정지!]를 누르면 멈춥니다</div>`
       break
     case 'window': {
       const remain = Math.ceil(store.windowRemainMs / 1000)
@@ -188,7 +197,15 @@ function renderStatus(): void {
 }
 
 function renderButtons(): void {
-  btnSpin.disabled = !(store.phase === 'collect' && store.menus.length >= 2)
+  if (store.phase === 'spinning') {
+    btnSpin.textContent = wheel.isStopping ? '두구두구...' : '🛑 정지!'
+    btnSpin.disabled = wheel.isStopping
+    btnSpin.classList.add('stop-mode')
+  } else {
+    btnSpin.textContent = '돌리기!'
+    btnSpin.disabled = !(store.phase === 'collect' && store.menus.length >= 2)
+    btnSpin.classList.remove('stop-mode')
+  }
   btnReroll.disabled = store.phase !== 'armed'
   btnReroll.textContent = store.rerollCredits > 0 ? `🔄 리롤 ×${store.rerollCredits}` : '🔄 리롤'
   btnConfirm.hidden = !(store.phase === 'window' || store.phase === 'armed')
@@ -239,7 +256,10 @@ store.on('armed', () => {
 })
 
 // ---------- 컨트롤 ----------
-btnSpin.addEventListener('click', doSpin)
+btnSpin.addEventListener('click', () => {
+  if (store.phase === 'spinning') doStop()
+  else doSpin()
+})
 btnReroll.addEventListener('click', doSpin)
 btnConfirm.addEventListener('click', () => store.confirmResult())
 btnPause.addEventListener('click', () => store.togglePaused())

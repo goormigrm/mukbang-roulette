@@ -265,10 +265,10 @@ export class Store {
   }
 
   // ---- 스핀 / 리롤 상태 머신 ----
-  /** 스핀 시작. 가중치 추첨으로 당첨 인덱스를 미리 확정해 반환. 불가하면 null */
-  beginSpin(): { index: number } | null {
-    if (this.menus.length < 2) return null
-    if (this.phase !== 'collect' && this.phase !== 'armed') return null
+  /** 스핀 시작(자유 회전). 정지 버튼을 누르기 전까지 당첨은 정해지지 않는다 */
+  beginSpin(): boolean {
+    if (this.menus.length < 2) return false
+    if (this.phase !== 'collect' && this.phase !== 'armed') return false
 
     if (this.phase === 'armed') {
       this.rerollCredits--
@@ -279,6 +279,16 @@ export class Store {
       )
     }
 
+    this.phase = 'spinning'
+    this.pendingWinner = null
+    this.winner = null
+    this.changed()
+    return true
+  }
+
+  /** [정지] 시점에 가중치 추첨으로 당첨 칸을 확정 */
+  pickWinner(): { index: number } | null {
+    if (this.phase !== 'spinning') return null
     const total = this.totalWeight()
     let r = Math.random() * total
     let index = 0
@@ -289,10 +299,7 @@ export class Store {
         break
       }
     }
-    this.phase = 'spinning'
     this.pendingWinner = this.menus[index]
-    this.winner = null
-    this.changed()
     return { index }
   }
 

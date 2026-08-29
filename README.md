@@ -18,18 +18,28 @@
 리롤 비용·제한시간·칸당 금액 등은 ⚙ 설정에서 자유롭게 변경할 수 있다.
 운영 편의: 도네 반영 일시정지 토글(⏸), 칸 조절 클릭 ±1 / Ctrl+클릭 ±10 / Alt+클릭 ±100, 테스트 도네이션.
 
-## 치지직 연동 설정 (최초 1회)
+## 치지직 연동 설정
 
-브라우저 보안(CORS) 때문에 작은 무료 프록시가 하나 필요하다.
+역할이 둘로 나뉜다. **스트리머는 키·비밀번호를 어디에도 입력하지 않는다.**
 
-1. **프록시 배포** — [dash.cloudflare.com](https://dash.cloudflare.com) → Workers & Pages → Create Worker → [`proxy/worker.js`](proxy/worker.js) 내용 붙여넣고 Deploy → `https://<이름>.<계정>.workers.dev` 주소 확보
-2. **앱 등록** — [치지직 개발자센터](https://developers.chzzk.naver.com)에서 애플리케이션 등록
+### 개발자가 할 일 (최초 1회)
+
+1. **앱 등록** — [치지직 개발자센터](https://developers.chzzk.naver.com)에서 애플리케이션 등록
    - 로그인 리디렉션 URI: `https://goormigrm.github.io/mukbang-roulette/`
-   - 발급된 **Client ID / Client Secret** 확보 (후원 조회 권한 필요)
-3. **룰렛 설정** — 사이트 ⚙ 설정 → 치지직 연동에 Client ID·Secret·프록시 URL 입력 → **1) 치지직 로그인**(스트리머 계정) → **2) 연결**
-4. 상단 배지가 **🟢 치지직 수신 중**이면 완료. 이후엔 접속만 하면 자동 연결된다.
+   - 후원(도네이션) 조회 권한 포함으로 신청 → **Client ID / Client Secret** 발급
+2. **프록시 배포** — [dash.cloudflare.com](https://dash.cloudflare.com) → Workers & Pages → Create Worker
+   → [`proxy/worker.js`](proxy/worker.js) 내용 붙여넣고 Deploy
+   → Worker의 **Settings → Variables and Secrets**에 `CHZZK_CLIENT_ID`, `CHZZK_CLIENT_SECRET` 등록 (Secret 타입)
+3. **기본값 심기** — [`src/config.ts`](src/config.ts)의 `PRESET_CLIENT_ID`(발급받은 Client ID)와
+   `PRESET_PROXY_URL`(워커 주소)을 채우고 `git push` → 자동 재배포
 
-Client ID/Secret과 토큰은 이 브라우저의 localStorage에만 저장된다 (서버 전송 없음, 프록시는 통과만).
+### 스트리머(철면수심)가 할 일 (최초 1회, 클릭 3번)
+
+1. 평소 쓰는 브라우저(치지직에 이미 로그인된)로 https://goormigrm.github.io/mukbang-roulette/ 접속
+2. ⚙ 설정 → **[1) 치지직 로그인]** 클릭 → **공식 치지직 페이지**에서 [동의] 클릭 (비밀번호 입력 없음, 이 사이트는 계정 정보를 볼 수 없음)
+3. 자동으로 룰렛에 돌아오면 **[2) 연결]** 클릭 → 상단 배지가 **🟢 치지직 수신 중**이면 완료
+
+이후에는 사이트에 접속만 하면 자동으로 다시 연결된다. 토큰은 스트리머 본인 브라우저(localStorage)에만 저장된다.
 
 ## 개발
 

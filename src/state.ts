@@ -1,5 +1,7 @@
 // 상태 저장소 + 규칙 엔진 (도네이션 → 메뉴 추가, 리롤 상태 머신, 라운드 기록)
 
+import { PRESET_CLIENT_ID, PRESET_PROXY_URL } from './config'
+
 export interface MenuItem {
   id: number
   name: string
@@ -107,6 +109,9 @@ export class Store {
     try {
       const s = localStorage.getItem(LS_SETTINGS)
       if (s) this.settings = { ...DEFAULT_SETTINGS, ...JSON.parse(s) }
+      // 개발자가 미리 심어둔 값이 있으면, 사용자가 직접 입력하지 않은 빈 칸을 채운다
+      if (!this.settings.clientId) this.settings.clientId = PRESET_CLIENT_ID
+      if (!this.settings.proxyUrl) this.settings.proxyUrl = PRESET_PROXY_URL
       const m = localStorage.getItem(LS_MENUS)
       if (m) {
         this.menus = JSON.parse(m)

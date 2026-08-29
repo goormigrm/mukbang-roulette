@@ -99,11 +99,15 @@ export async function handleOAuthRedirect(): Promise<boolean> {
 
 async function tokenRequest(extra: Record<string, string>): Promise<TokenSet> {
   const { clientId, clientSecret } = store.settings
-  if (!clientId || !clientSecret) throw new Error('Client ID/Secret이 설정되지 않았습니다')
+  if (!clientId) throw new Error('Client ID가 설정되지 않았습니다')
+  // Client Secret은 프록시 워커의 환경 변수(CHZZK_CLIENT_SECRET)에 저장해 두는 것을 권장.
+  // 설정에 입력된 경우에만 함께 보내고, 비어 있으면 워커가 채워 넣는다.
+  const body: Record<string, string> = { clientId, ...extra }
+  if (clientSecret) body.clientSecret = clientSecret
   const res = await fetch(`${apiBase()}/auth/v1/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientId, clientSecret, ...extra }),
+    body: JSON.stringify(body),
   })
   const json = (await res.json().catch(() => null)) as {
     content?: { accessToken?: string; refreshToken?: string }

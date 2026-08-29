@@ -64,6 +64,31 @@ export function tick(progress = 0): void {
   burst(0, 0.02, 0.02 + 0.02 * progress, 3800)
 }
 
+// ---- 리롤 카운트다운 시계 소리 ----
+let tock = false
+
+/** 째깍(1초 간격). urgent=true(마지막 10초)면 더 높고 날카로운 소리 — 호출 간격도 0.5초로 빨라진다.
+ *  urgency 0~1: 마감에 가까울수록 음정이 조금씩 올라간다 */
+export function clockTick(urgent = false, urgency = 0): void {
+  tock = !tock
+  if (urgent) {
+    const f = 1250 + 350 * urgency + (tock ? 90 : 0)
+    beep(f, 0.05, 'square', 0.1)
+    burst(0, 0.03, 0.05, 5200)
+    beep(f / 2, 0.06, 'sine', 0.06) // 심장박동 느낌의 저음
+  } else {
+    beep(tock ? 780 : 960, 0.045, 'square', 0.055)
+    burst(0, 0.02, 0.02, 3200)
+  }
+}
+
+/** 접수 마감 — 뎅 (공 소리) */
+export function timeUp(): void {
+  beep(660, 0.7, 'triangle', 0.16, 0, 440)
+  beep(330, 0.9, 'sine', 0.12)
+  burst(0, 0.35, 0.08, 2500)
+}
+
 // ---- 두구두구 드럼롤 ----
 let drumTimer: ReturnType<typeof setInterval> | null = null
 

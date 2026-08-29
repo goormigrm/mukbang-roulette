@@ -252,12 +252,27 @@ function renderAll(): void {
 }
 
 store.on('change', renderAll)
+let lastClockUnit = -1
 store.on('tick', (remainMs) => {
   const sec = document.getElementById('remain-sec')
   const fill = document.getElementById('timer-fill')
   const ms = remainMs as number
   if (sec) sec.textContent = String(Math.ceil(ms / 1000))
   if (fill) fill.style.width = `${(ms / (store.settings.rerollWindowSec * 1000)) * 100}%`
+
+  // 째깍째깍 — 평소엔 1초 간격, 마지막 10초는 0.5초 간격으로 긴박하게
+  if (!store.settings.sound || store.phase !== 'window') return
+  if (ms <= 0) {
+    lastClockUnit = -1
+    sound.timeUp()
+    return
+  }
+  const urgent = ms <= 10_000
+  const unit = urgent ? Math.floor(ms / 500) : Math.floor(ms / 1000)
+  if (unit !== lastClockUnit) {
+    lastClockUnit = unit
+    sound.clockTick(urgent, urgent ? 1 - ms / 10_000 : 0)
+  }
 })
 store.on('winner', () => {
   sound.stopDrumroll()

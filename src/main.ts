@@ -484,6 +484,15 @@ initSettingsInputs()
 
 // ---------- 치지직 연동 ----------
 const connBadge = $('#conn-badge')
+const btnChzzkLogin = $<HTMLButtonElement>('#btn-chzzk-login')
+const btnChzzkLogout = $<HTMLButtonElement>('#btn-chzzk-logout')
+
+// 로그인 상태에 따라 로그인/로그아웃 버튼 중 하나만 보여준다
+function updateAuthButtons(): void {
+  const loggedIn = chzzk.hasToken()
+  btnChzzkLogin.hidden = loggedIn
+  btnChzzkLogout.hidden = !loggedIn
+}
 chzzk.onStatus((s, detail) => {
   connBadge.classList.remove('badge-off', 'badge-on', 'badge-err')
   switch (s) {
@@ -506,22 +515,26 @@ chzzk.onStatus((s, detail) => {
       connBadge.textContent = '치지직 미연결'
   }
   connBadge.title = detail ?? ''
+  updateAuthButtons()
 })
 
-$('#btn-chzzk-login').addEventListener('click', () => {
-  // 이미 로그인돼 있으면 재연결, 아니면 공식 치지직 동의 페이지로 이동
+btnChzzkLogin.addEventListener('click', () => {
+  // 버튼이 보이는 건 미로그인 상태뿐이지만, 혹시 토큰이 있으면 재연결로 처리
   if (chzzk.hasToken()) void chzzk.connect()
   else chzzk.startLogin()
 })
 
-$('#btn-chzzk-logout').addEventListener('click', () => {
+btnChzzkLogout.addEventListener('click', () => {
   chzzk.logout()
+  updateAuthButtons()
 })
 
 // ---------- 시작 ----------
 renderAll()
+updateAuthButtons()
 void (async () => {
   const loggedInNow = await chzzk.handleOAuthRedirect()
+  updateAuthButtons()
   if (loggedInNow || (chzzk.hasToken() && store.settings.clientId)) void chzzk.connect()
 })()
 

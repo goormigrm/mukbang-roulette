@@ -179,7 +179,7 @@ function renderStatus(): void {
     case 'collect':
       html = store.confirmedWinner
         ? `<div class="big">오늘의 메뉴: <b>${escapeHtml(store.confirmedWinner)}</b> 🎉</div>`
-        : `<div class="muted">도네이션 ${s.wonPerSlot.toLocaleString('ko-KR')}원당 1칸 · 후보가 2개 이상이면 돌릴 수 있어요</div>`
+        : `<div class="muted">도네이션 ${s.wonPerSlot.toLocaleString('ko-KR')}원당 1칸 · 후보가 들어오면 돌릴 수 있어요</div>`
       break
     case 'spinning':
       html = wheel.isStopping
@@ -220,7 +220,7 @@ function renderButtons(): void {
     btnSpin.classList.add('stop-mode')
   } else {
     btnSpin.textContent = store.phase === 'collect' ? '돌리기!' : '🔁 다시 돌리기'
-    btnSpin.disabled = store.menus.length < 2
+    btnSpin.disabled = store.menus.length < 1
     btnSpin.classList.remove('stop-mode')
   }
   btnOpenWindow.hidden = store.phase !== 'decision'
@@ -455,11 +455,21 @@ function initSettingsInputs(): void {
 }
 
 function applySettingsInputs(): void {
+  const num = (sel: string, fallback: number): number => {
+    const raw = $<HTMLInputElement>(sel).value.trim()
+    if (raw === '') return fallback
+    const n = Number(raw)
+    return Number.isFinite(n) ? n : fallback
+  }
   store.updateSettings({
-    rerollCost: Math.max(1000, Number($<HTMLInputElement>('#set-reroll-cost').value) || 20000),
-    rerollWindowSec: Math.min(600, Math.max(5, Number($<HTMLInputElement>('#set-reroll-sec').value) || 60)),
-    minAmount: Math.max(0, Number($<HTMLInputElement>('#set-min-amount').value) || 1000),
-    wonPerSlot: Math.max(500, Number($<HTMLInputElement>('#set-won-per-slot').value) || 1000),
+    // 리롤 비용 하한 1,000원: 최소 인정 금액 단위(1,000원=1칸)와의 정합용
+    rerollCost: Math.max(1000, Math.floor(num('#set-reroll-cost', 20000))),
+    // 상한 없음, 0초 방지만
+    rerollWindowSec: Math.max(1, Math.floor(num('#set-reroll-sec', 60))),
+    // 0원 설정 가능 (모든 도네 인정)
+    minAmount: Math.max(0, Math.floor(num('#set-min-amount', 1000))),
+    // 0 나눗셈 방지만
+    wonPerSlot: Math.max(1, Math.floor(num('#set-won-per-slot', 1000))),
     sound: $<HTMLInputElement>('#set-sound').checked,
   })
 }

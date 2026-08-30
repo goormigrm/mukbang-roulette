@@ -177,7 +177,8 @@ export class Store {
   }
 
   addMenu(name: string, weight: number, donor?: string): void {
-    name = name.trim().slice(0, 20)
+    // 40자 컷은 룰렛 라벨·목록 표시가 깨지지 않게 하는 최소한의 안전장치
+    name = name.trim().slice(0, 40)
     if (!name || weight < 1) return
     const existing = this.menus.find((m) => m.name === name)
     if (existing) {
@@ -268,7 +269,7 @@ export class Store {
   private applyDonation(d: DonationInput): void {
     const slots = Math.floor(d.amount / this.settings.wonPerSlot)
     if (slots < 1) return
-    const name = d.message.trim() ? d.message.trim().slice(0, 20) : `${d.nick}의 추천`
+    const name = d.message.trim() ? d.message.trim().slice(0, 40) : `${d.nick}의 추천`
     const existing = this.menus.find((m) => m.name === name)
     if (existing) {
       existing.weight += slots
@@ -285,7 +286,7 @@ export class Store {
    *  useCredit=true 면 리롤권을 1개 소모하는 리롤, false 면 자유 (재)돌리기 —
    *  당첨 발표 후에도 리롤 도네 없이 그냥 다시 돌릴 수 있다 ("3번 돌려서 나온 걸로" 운영) */
   beginSpin(useCredit = false): boolean {
-    if (this.menus.length < 2 || this.phase === 'spinning') return false
+    if (this.menus.length < 1 || this.phase === 'spinning') return false
 
     if (useCredit) {
       if (this.rerollCredits < 1 || (this.phase !== 'decision' && this.phase !== 'window')) {
@@ -446,7 +447,7 @@ export class Store {
     if (!Array.isArray(raw)) throw new Error('형식이 올바르지 않습니다 (menus 배열 필요)')
     const menus: MenuItem[] = []
     for (const m of raw) {
-      const name = String(m?.name ?? '').trim().slice(0, 20)
+      const name = String(m?.name ?? '').trim().slice(0, 40)
       const weight = Math.max(1, Math.floor(Number((m as { weight?: number })?.weight) || 1))
       if (!name) continue
       const existing = menus.find((x) => x.name === name)
@@ -457,7 +458,7 @@ export class Store {
           name,
           weight,
           donors: Array.isArray((m as { donors?: string[] }).donors)
-            ? ((m as { donors?: string[] }).donors as string[]).map(String).slice(0, 10)
+            ? ((m as { donors?: string[] }).donors as string[]).map(String)
             : [],
         })
     }

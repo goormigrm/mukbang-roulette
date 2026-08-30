@@ -59,8 +59,8 @@
           <div class="card frame">
             <h2>오늘의 후보 <span id="total-slots" class="muted"></span></h2>
             <form id="manual-add" class="row">
-              <input id="add-name" placeholder="메뉴 이름 직접 추가" maxlength="20" autocomplete="off" />
-              <input id="add-weight" type="number" value="1" min="1" max="99" title="칸 수" />
+              <input id="add-name" placeholder="메뉴 이름 직접 추가" maxlength="40" autocomplete="off" />
+              <input id="add-weight" type="number" value="1" min="1" title="칸 수" />
               <button type="submit" class="btn-small">추가</button>
             </form>
             <ul id="menu-list" class="menu-list"></ul>
@@ -77,9 +77,9 @@
             <details class="test-box">
               <summary>🧪 테스트 도네이션</summary>
               <form id="test-form" class="row wrap">
-                <input id="test-nick" placeholder="닉네임" value="테스터" maxlength="12" />
+                <input id="test-nick" placeholder="닉네임" value="테스터" maxlength="20" />
                 <input id="test-amount" type="number" value="3000" step="1000" min="0" />
-                <input id="test-msg" placeholder="메뉴 (도네 메시지)" maxlength="30" />
+                <input id="test-msg" placeholder="메뉴 (도네 메시지)" maxlength="60" />
                 <button type="submit" class="btn-small">보내기</button>
               </form>
             </details>
@@ -102,7 +102,7 @@
           <div class="card frame">
             <h2>룰렛 규칙 <span class="muted small-text">(변경 즉시 저장)</span></h2>
             <label>리롤 비용 (원, 단일 도네 기준) <input id="set-reroll-cost" type="number" step="1000" min="1000" /></label>
-            <label>리롤 제한시간 (초) <input id="set-reroll-sec" type="number" min="5" max="600" /></label>
+            <label>리롤 제한시간 (초) <input id="set-reroll-sec" type="number" min="1" /></label>
             <label>최소 인정 금액 (원) <input id="set-min-amount" type="number" step="500" min="0" /></label>
             <label>1칸당 금액 (원) <input id="set-won-per-slot" type="number" step="500" min="500" /></label>
             <label class="check"><input id="set-sound" type="checkbox" /> 효과음 켜기</label>

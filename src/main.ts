@@ -324,6 +324,9 @@ store.on('winner', () => {
 store.on('armed', () => {
   if (store.settings.sound) sound.rerollChime()
 })
+store.on('confirmed', () => {
+  if (store.settings.sound) sound.finale()
+})
 
 // ---------- 컨트롤 ----------
 btnSpin.addEventListener('click', () => {

@@ -147,6 +147,34 @@ export function fanfare(): void {
   burst(0.58, 0.4, 0.1, 7000)
 }
 
+/** 최종 확정 피날레 — 당첨 팡파레보다 한층 크고 긴 축포 */
+export function finale(): void {
+  stopDrumroll()
+  // 축포 두 방
+  burst(0, 0.6, 0.18, 6500)
+  burst(0, 0.15, 0.16, 250)
+  burst(0.5, 0.5, 0.14, 7000)
+  // 코드 진행: C → F → G → C (한 옥타브 위 마무리)
+  const chords: [number, number[]][] = [
+    [0, [261.63, 329.63, 392.0]],
+    [0.3, [349.23, 440.0, 523.25]],
+    [0.6, [392.0, 493.88, 587.33]],
+    [0.9, [523.25, 659.25, 783.99, 1046.5]],
+  ]
+  for (const [when, notes] of chords) {
+    for (const f of notes) {
+      beep(f, 0.42, 'sawtooth', 0.05, when)
+      beep(f, 0.42, 'triangle', 0.07, when)
+    }
+  }
+  // 상승 아르페지오 런
+  const run = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1318.5, 1568.0]
+  run.forEach((f, i) => beep(f, 0.22, 'triangle', 0.12, 1.25 + i * 0.07))
+  // 마무리 하이 노트 + 크래시
+  beep(2093, 0.9, 'triangle', 0.13, 1.85)
+  burst(1.85, 0.55, 0.12, 8000)
+}
+
 /** 리롤권 획득 — 급상승 슬라이드 + 종소리 */
 export function rerollChime(): void {
   beep(300, 0.28, 'sawtooth', 0.1, 0, 1200) // 급상승 스윕

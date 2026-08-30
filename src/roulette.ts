@@ -239,7 +239,7 @@ export class RouletteWheel {
 
     const now = performance.now()
     const v = this.freeVelocity(now)
-    const duration = 5500 + Math.random() * 2500 // 5.5~8초 감속
+    const duration = 8000 + Math.random() * 3000 // 8~11초 감속 — 정지 후에도 충분히 오래 돌며 긴장감 유지
     // easeOutCubic의 t=0 기울기(3·range/duration)가 현재 속도 v와 같아지는 회전량
     const idealRange = (v * duration) / 1000 / 3
 

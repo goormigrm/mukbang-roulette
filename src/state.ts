@@ -63,7 +63,7 @@ const LS_HISTORY = 'mr:history'
 const LS_PAUSED = 'mr:paused'
 export const MAX_HISTORY = 20
 
-type EventName = 'change' | 'tick' | 'winner' | 'armed' | 'donation'
+type EventName = 'change' | 'tick' | 'winner' | 'armed' | 'donation' | 'confirmed'
 
 export class Store {
   settings: Settings = { ...DEFAULT_SETTINGS }
@@ -434,6 +434,7 @@ export class Store {
     this.rerollUsers = []
     this.currentRerollCost = null
     this.windowOpened = false
+    this.emit('confirmed', winnerName)
     this.changed()
   }
 

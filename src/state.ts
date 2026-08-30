@@ -85,7 +85,6 @@ export class Store {
   windowOpened = false
 
   private pendingWinner: MenuItem | null = null
-  private pendingDonations: DonationInput[] = []
   private seen = new Set<string>()
   private nextMenuId = 1
   private nextRoundId = 1
@@ -235,6 +234,10 @@ export class Store {
       return
     }
 
+    // ── 도네이션 라우팅 규칙 (2026-08-30 확정) ──
+    // 메뉴 추가는 오직 모집 중(collect)에만 한다.
+    // 스핀 중·당첨 발표 후에는, "리롤권 인정"에 해당하는 것만 받고 나머지는 전부 무시.
+
     // 리롤 판정: 단일 도네 금액 ≥ 이번 회차 리롤 비용 → 리롤권 1개 누적.
     // 타이머는 멈추지 않고 끝까지 흐른다 — 그동안 여러 명의 리롤권이 계속 쌓일 수 있다.
     // 접수 마감 뒤(decision + windowOpened)에도 확정 전까지 인정 (치지직 연동 지연 대비).
@@ -252,14 +255,29 @@ export class Store {
       return
     }
 
-    if (d.amount < this.settings.minAmount) {
-      this.addFeed('skip', `[${d.nick}] ${won}원 — 최소 금액(${this.settings.minAmount.toLocaleString('ko-KR')}원) 미만`)
+    // 리롤 접수 중·마감 후 대기 중의 리롤 비용 미만 도네는 무시
+    if (rerollEligible) {
+      this.addFeed(
+        'skip',
+        `[${d.nick}] ${won}원 — 리롤 비용(${this.effectiveRerollCost().toLocaleString('ko-KR')}원) 미만이라 반영 안 됨`,
+      )
       return
     }
 
+    // 스핀 중 도네는 전부 무시
     if (this.phase === 'spinning') {
-      this.pendingDonations.push(d)
-      this.addFeed('info', `⏳ [${d.nick}] ${won}원 — 스핀 종료 후 반영 예정`)
+      this.addFeed('skip', `[${d.nick}] ${won}원 — 스핀 중에는 반영하지 않습니다`)
+      return
+    }
+
+    // 당첨 발표 후 접수를 열기 전 상태도 전부 무시 (확정 후 다음 판 모집부터 반영)
+    if (this.phase === 'decision') {
+      this.addFeed('skip', `[${d.nick}] ${won}원 — 당첨 발표 대기 중: 반영 안 됨 (다음 판은 확정 후부터)`)
+      return
+    }
+
+    if (d.amount < this.settings.minAmount) {
+      this.addFeed('skip', `[${d.nick}] ${won}원 — 최소 금액(${this.settings.minAmount.toLocaleString('ko-KR')}원) 미만`)
       return
     }
 
@@ -340,11 +358,6 @@ export class Store {
     this.emit('winner', this.winner)
     this.windowOpened = false // 새 결과 — 접수 이력 초기화 (리롤 비용·잔여 리롤권은 확정 전까지 유지)
     this.phase = 'decision'
-
-    // 스핀 중 대기열 반영 (규칙 엔진을 다시 통과시켜 리롤권 판정도 받게 한다)
-    const queued = this.pendingDonations
-    this.pendingDonations = []
-    for (const d of queued) this.routeDonation(d)
     this.changed()
   }
 

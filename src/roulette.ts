@@ -81,6 +81,20 @@ export class RouletteWheel {
     return this.mode === 'stopping'
   }
 
+  /** 현재 회전 속도 / 최고 속도 (0~1) — 속도에 반응하는 회전음용 */
+  get speedRatio(): number {
+    const now = performance.now()
+    if (this.mode === 'free') return this.freeVelocity(now) / MAX_SPEED
+    if (this.mode === 'stopping') {
+      // easeOutCubic의 순간 기울기: 3·(1-t)²·range/duration
+      const t = Math.min(1, (now - this.stopStartAt) / this.stopDuration)
+      const range = this.stopEndRot - this.stopStartRot
+      const v = (3 * Math.pow(1 - t, 2) * range) / (this.stopDuration / 1000)
+      return Math.min(1, v / MAX_SPEED)
+    }
+    return 0
+  }
+
   private fitCanvas(): void {
     const dpr = window.devicePixelRatio || 1
     const size = Math.min(this.canvas.clientWidth || 560, 760)

@@ -19,6 +19,7 @@ const wheel = new RouletteWheel(
 function doSpin(useCredit = false): void {
   if (!store.beginSpin(useCredit)) return
   wheel.startFreeSpin()
+  if (store.settings.sound) sound.startSpinLoop(() => wheel.speedRatio)
 }
 
 function doStop(): void {
@@ -319,6 +320,7 @@ store.on('tick', (remainMs) => {
 })
 store.on('winner', () => {
   sound.stopDrumroll()
+  sound.stopSpinLoop()
   if (store.settings.sound) sound.fanfare()
 })
 store.on('armed', () => {

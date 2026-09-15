@@ -9,8 +9,8 @@ let noiseBuf: AudioBuffer | null = null
 /** 모든 소리가 거치는 출력단 — 컴프레서로 겹칠 때(팡파레 등) 찌그러지는 클리핑을 막는다 */
 let master: AudioNode | null = null
 
-// 전체 음량 배율 — 개별 게인 값에 일괄 적용
-const MASTER = 1.6
+// 전체 음량 배율 — 개별 게인 값에 일괄 적용 (컴프레서가 뒤에 있어 크게 잡아도 찌그러지지 않는다)
+const MASTER = 2.4
 
 function ac(): AudioContext | null {
   try {
@@ -25,15 +25,26 @@ function ac(): AudioContext | null {
 function out(a: AudioContext): AudioNode {
   if (!master) {
     const comp = a.createDynamicsCompressor()
-    comp.threshold.value = -12
-    comp.knee.value = 20
-    comp.ratio.value = 6
+    comp.threshold.value = -14
+    comp.knee.value = 18
+    comp.ratio.value = 8
     comp.attack.value = 0.003
     comp.release.value = 0.12
-    comp.connect(a.destination)
+    const makeup = a.createGain() // 컴프레서가 깎은 만큼 되살리는 메이크업 게인
+    makeup.gain.value = 1.25
+    comp.connect(makeup).connect(a.destination)
     master = comp
   }
   return master
+}
+
+function noise(a: AudioContext): AudioBuffer {
+  if (!noiseBuf) {
+    noiseBuf = a.createBuffer(1, a.sampleRate * 0.3, a.sampleRate)
+    const data = noiseBuf.getChannelData(0)
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1
+  }
+  return noiseBuf
 }
 
 function beep(freq: number, dur: number, type: OscillatorType, gainV: number, when = 0, slideTo?: number): void {
@@ -56,14 +67,9 @@ function beep(freq: number, dur: number, type: OscillatorType, gainV: number, wh
 function burst(when: number, dur: number, gainV: number, filterFreq: number): void {
   const a = ac()
   if (!a) return
-  if (!noiseBuf) {
-    noiseBuf = a.createBuffer(1, a.sampleRate * 0.3, a.sampleRate)
-    const data = noiseBuf.getChannelData(0)
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1
-  }
   const t = a.currentTime + when
   const src = a.createBufferSource()
-  src.buffer = noiseBuf
+  src.buffer = noise(a)
   const filter = a.createBiquadFilter()
   filter.type = 'bandpass'
   filter.frequency.value = filterFreq
@@ -77,20 +83,114 @@ function burst(when: number, dur: number, gainV: number, filterFreq: number): vo
 }
 
 /** 룰렛 칸 넘어갈 때 틱 — 래칫(딸깍이) 느낌의 2중 레이어.
- *  자유 회전 중엔 두 음을 빠르게 교차(따다다닥), 감속 중엔 progress(0~1)에 따라
+ *  자유 회전 중엔 네 음을 돌아가며 치고(따다다닥, 살짝씩 흔들리는 음정), 감속 중엔 progress(0~1)에 따라
  *  음정과 볼륨이 점점 올라가 멈추기 직전이 가장 긴장되게 들린다 */
-let tickAlt = false
+const FREE_TICK_NOTES = [880, 990, 1110, 960]
+let tickIdx = 0
 export function tick(progress = 0): void {
-  tickAlt = !tickAlt
+  tickIdx = (tickIdx + 1) % FREE_TICK_NOTES.length
   const stopping = progress > 0
-  const f = stopping ? 1000 + 900 * progress : tickAlt ? 880 : 1040
-  const g = stopping ? 0.07 + 0.07 * progress : 0.06
+  const detune = 1 + (Math.random() - 0.5) * 0.06 // ±3% 흔들림으로 기계적인 느낌을 덜어낸다
+  const f = (stopping ? 1000 + 900 * progress : FREE_TICK_NOTES[tickIdx]) * detune
+  const g = stopping ? 0.09 + 0.09 * progress : 0.085
   beep(f, 0.028, 'square', g) // 딸깍 본체
   beep(f * 1.5, 0.02, 'triangle', g * 0.5) // 카랑한 상단 배음
-  burst(0, 0.016, 0.045 + 0.04 * progress, 4600) // 나무 부딪는 타격감
+  burst(0, 0.016, 0.06 + 0.05 * progress, 4600) // 나무 부딪는 타격감
   if (stopping && progress > 0.75) {
     // 막판엔 저음 심장박동을 한 겹 더
-    beep(120 + 60 * progress, 0.06, 'sine', 0.09)
+    beep(120 + 60 * progress, 0.06, 'sine', 0.12)
+  }
+}
+
+// ---- 회전음: 속도에 따라 높아지고 커지는 바람 소리 + 모터 웅웅 ----
+interface SpinLoop {
+  src: AudioBufferSourceNode
+  filter: BiquadFilterNode
+  gain: GainNode
+  hum: OscillatorNode
+  humGain: GainNode
+  timer: ReturnType<typeof setInterval>
+}
+let spinLoop: SpinLoop | null = null
+
+/** [돌리기] 순간 — 스윽 올라가는 바람 소리(라이저) */
+function spinRiser(a: AudioContext): void {
+  const t = a.currentTime
+  const src = a.createBufferSource()
+  src.buffer = noise(a)
+  const filter = a.createBiquadFilter()
+  filter.type = 'bandpass'
+  filter.Q.value = 1.2
+  filter.frequency.setValueAtTime(220, t)
+  filter.frequency.exponentialRampToValueAtTime(3200, t + 0.7)
+  const gain = a.createGain()
+  gain.gain.setValueAtTime(0.0001, t)
+  gain.gain.exponentialRampToValueAtTime(0.22 * MASTER, t + 0.35)
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.75)
+  src.connect(filter).connect(gain).connect(out(a))
+  src.start(t)
+  src.stop(t + 0.8)
+}
+
+/** 회전음 시작. getSpeed()는 현재 속도/최고속도(0~1)를 돌려준다 — 50ms마다 읽어 소리를 따라가게 한다 */
+export function startSpinLoop(getSpeed: () => number): void {
+  const a = ac()
+  if (!a) return
+  stopSpinLoop()
+  spinRiser(a)
+
+  const src = a.createBufferSource()
+  src.buffer = noise(a)
+  src.loop = true
+  const filter = a.createBiquadFilter()
+  filter.type = 'bandpass'
+  filter.Q.value = 1.1
+  const gain = a.createGain()
+  gain.gain.value = 0
+  src.connect(filter).connect(gain).connect(out(a))
+  src.start()
+
+  const hum = a.createOscillator()
+  hum.type = 'sawtooth'
+  const humGain = a.createGain()
+  humGain.gain.value = 0
+  const humFilter = a.createBiquadFilter()
+  humFilter.type = 'lowpass'
+  humFilter.frequency.value = 420
+  hum.connect(humFilter).connect(humGain).connect(out(a))
+  hum.start()
+
+  const timer = setInterval(() => {
+    const s = Math.max(0, Math.min(1, getSpeed()))
+    const t = a.currentTime
+    // 빠를수록 바람이 높고 세게, 느려지면 낮고 조용하게
+    filter.frequency.setTargetAtTime(260 + 3000 * s * s, t, 0.06)
+    gain.gain.setTargetAtTime((0.02 + 0.26 * s) * MASTER, t, 0.06)
+    hum.frequency.setTargetAtTime(48 + 230 * s, t, 0.06)
+    humGain.gain.setTargetAtTime(0.09 * s * MASTER, t, 0.06)
+  }, 50)
+
+  spinLoop = { src, filter, gain, hum, humGain, timer }
+}
+
+/** 회전음 정지 — 0.35초에 걸쳐 사라진다 */
+export function stopSpinLoop(): void {
+  if (!spinLoop) return
+  const a = ac()
+  const { src, gain, hum, humGain, timer } = spinLoop
+  spinLoop = null
+  clearInterval(timer)
+  if (!a) return
+  const t = a.currentTime
+  gain.gain.cancelScheduledValues(t)
+  gain.gain.setTargetAtTime(0, t, 0.08)
+  humGain.gain.cancelScheduledValues(t)
+  humGain.gain.setTargetAtTime(0, t, 0.08)
+  try {
+    src.stop(t + 0.4)
+    hum.stop(t + 0.4)
+  } catch {
+    // 이미 멈춘 노드
   }
 }
 

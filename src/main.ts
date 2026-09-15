@@ -11,6 +11,7 @@ const $ = <T extends HTMLElement = HTMLElement>(sel: string): T => document.quer
 const wheel = new RouletteWheel(
   $<HTMLCanvasElement>('#wheel'),
   () => store.menus,
+  // 핀을 하나 지날 때마다 딸깍
   (progress) => {
     if (store.settings.sound) sound.tick(progress)
   },
@@ -19,7 +20,6 @@ const wheel = new RouletteWheel(
 function doSpin(useCredit = false): void {
   if (!store.beginSpin(useCredit)) return
   wheel.startFreeSpin()
-  if (store.settings.sound) sound.startSpinLoop(() => wheel.speedRatio)
 }
 
 function doStop(): void {
@@ -320,7 +320,6 @@ store.on('tick', (remainMs) => {
 })
 store.on('winner', () => {
   sound.stopDrumroll()
-  sound.stopSpinLoop()
   if (store.settings.sound) sound.fanfare()
 })
 store.on('armed', () => {

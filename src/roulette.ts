@@ -39,6 +39,8 @@ type SpinMode = 'idle' | 'free' | 'stopping'
 
 const MAX_SPEED = TAU * 2.2 // 자유 회전 속도 (rad/s)
 const ACCEL_MS = 800 // 최고 속도 도달 시간
+// 딸깍 소리용 가상 핀 개수 — 실제 돌림판처럼 메뉴 개수와 무관하게 일정한 리듬으로 딸깍인다
+const PEGS = 24
 
 export class RouletteWheel {
   private rotation = Math.random() * TAU
@@ -61,8 +63,8 @@ export class RouletteWheel {
   constructor(
     private canvas: HTMLCanvasElement,
     private getItems: () => MenuItem[],
-    /** 칸 경계 통과 시 호출. progress: 감속 진행도 0~1 (자유 회전 중엔 0) */
-    private onSegmentCross?: (progress: number) => void,
+    /** 가상 핀 하나를 지날 때마다 호출. progress: 감속 진행도 0~1 (자유 회전 중엔 0) */
+    private onPegCross?: (progress: number) => void,
   ) {
     const resize = () => this.fitCanvas()
     window.addEventListener('resize', resize)
@@ -81,18 +83,10 @@ export class RouletteWheel {
     return this.mode === 'stopping'
   }
 
-  /** 현재 회전 속도 / 최고 속도 (0~1) — 속도에 반응하는 회전음용 */
-  get speedRatio(): number {
-    const now = performance.now()
-    if (this.mode === 'free') return this.freeVelocity(now) / MAX_SPEED
-    if (this.mode === 'stopping') {
-      // easeOutCubic의 순간 기울기: 3·(1-t)²·range/duration
-      const t = Math.min(1, (now - this.stopStartAt) / this.stopDuration)
-      const range = this.stopEndRot - this.stopStartRot
-      const v = (3 * Math.pow(1 - t, 2) * range) / (this.stopDuration / 1000)
-      return Math.min(1, v / MAX_SPEED)
-    }
-    return 0
+  /** 현재 회전각이 몇 번째 가상 핀 구간에 있는지 (딸깍 트리거용) */
+  private pegIndex(): number {
+    const a = ((this.rotation % TAU) + TAU) % TAU
+    return Math.floor(a / (TAU / PEGS))
   }
 
   private fitCanvas(): void {
@@ -296,7 +290,7 @@ export class RouletteWheel {
   private step(now: number): void {
     const dt = Math.min(0.3, (now - this.lastFrameAt) / 1000)
     this.lastFrameAt = now
-    const prevIdx = this.indexAtPointer()
+    const prevPeg = this.pegIndex()
 
     if (this.mode === 'free') {
       this.rotation += this.freeVelocity(now) * dt
@@ -318,12 +312,11 @@ export class RouletteWheel {
     }
 
     this.draw()
-    const idx = this.indexAtPointer()
-    if (idx !== prevIdx && now - this.lastTickAt > 40) {
+    if (this.pegIndex() !== prevPeg && now - this.lastTickAt > 35) {
       this.lastTickAt = now
       const progress =
         this.mode === 'stopping' ? Math.min(1, (now - this.stopStartAt) / this.stopDuration) : 0
-      this.onSegmentCross?.(progress)
+      this.onPegCross?.(progress)
     }
   }
 }

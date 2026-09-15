@@ -82,115 +82,20 @@ function burst(when: number, dur: number, gainV: number, filterFreq: number): vo
   src.stop(t + dur)
 }
 
-/** 룰렛 칸 넘어갈 때 틱 — 래칫(딸깍이) 느낌의 2중 레이어.
- *  자유 회전 중엔 네 음을 돌아가며 치고(따다다닥, 살짝씩 흔들리는 음정), 감속 중엔 progress(0~1)에 따라
- *  음정과 볼륨이 점점 올라가 멈추기 직전이 가장 긴장되게 들린다 */
-const FREE_TICK_NOTES = [880, 990, 1110, 960]
-let tickIdx = 0
+/** 돌림판 날개가 핀에 부딪히는 "딸깍" 한 번 — 실제 룰렛 래칫 소리.
+ *  룰렛이 핀(24개) 하나를 지날 때마다 호출된다. 빠를 땐 따다다닥, 느려지면 딸깍… 딸깍… 간격이 벌어진다.
+ *  progress(0~1): 감속 진행도 — 멈추기 직전일수록 조금 더 밝고 크게 */
 export function tick(progress = 0): void {
-  tickIdx = (tickIdx + 1) % FREE_TICK_NOTES.length
-  const stopping = progress > 0
-  const detune = 1 + (Math.random() - 0.5) * 0.06 // ±3% 흔들림으로 기계적인 느낌을 덜어낸다
-  const f = (stopping ? 1000 + 900 * progress : FREE_TICK_NOTES[tickIdx]) * detune
-  const g = stopping ? 0.09 + 0.09 * progress : 0.085
-  beep(f, 0.028, 'square', g) // 딸깍 본체
-  beep(f * 1.5, 0.02, 'triangle', g * 0.5) // 카랑한 상단 배음
-  burst(0, 0.016, 0.06 + 0.05 * progress, 4600) // 나무 부딪는 타격감
-  if (stopping && progress > 0.75) {
-    // 막판엔 저음 심장박동을 한 겹 더
-    beep(120 + 60 * progress, 0.06, 'sine', 0.12)
-  }
-}
-
-// ---- 회전음: 속도에 따라 높아지고 커지는 바람 소리 + 모터 웅웅 ----
-interface SpinLoop {
-  src: AudioBufferSourceNode
-  filter: BiquadFilterNode
-  gain: GainNode
-  hum: OscillatorNode
-  humGain: GainNode
-  timer: ReturnType<typeof setInterval>
-}
-let spinLoop: SpinLoop | null = null
-
-/** [돌리기] 순간 — 스윽 올라가는 바람 소리(라이저) */
-function spinRiser(a: AudioContext): void {
-  const t = a.currentTime
-  const src = a.createBufferSource()
-  src.buffer = noise(a)
-  const filter = a.createBiquadFilter()
-  filter.type = 'bandpass'
-  filter.Q.value = 1.2
-  filter.frequency.setValueAtTime(220, t)
-  filter.frequency.exponentialRampToValueAtTime(3200, t + 0.7)
-  const gain = a.createGain()
-  gain.gain.setValueAtTime(0.0001, t)
-  gain.gain.exponentialRampToValueAtTime(0.22 * MASTER, t + 0.35)
-  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.75)
-  src.connect(filter).connect(gain).connect(out(a))
-  src.start(t)
-  src.stop(t + 0.8)
-}
-
-/** 회전음 시작. getSpeed()는 현재 속도/최고속도(0~1)를 돌려준다 — 50ms마다 읽어 소리를 따라가게 한다 */
-export function startSpinLoop(getSpeed: () => number): void {
-  const a = ac()
-  if (!a) return
-  stopSpinLoop()
-  spinRiser(a)
-
-  const src = a.createBufferSource()
-  src.buffer = noise(a)
-  src.loop = true
-  const filter = a.createBiquadFilter()
-  filter.type = 'bandpass'
-  filter.Q.value = 1.1
-  const gain = a.createGain()
-  gain.gain.value = 0
-  src.connect(filter).connect(gain).connect(out(a))
-  src.start()
-
-  const hum = a.createOscillator()
-  hum.type = 'sawtooth'
-  const humGain = a.createGain()
-  humGain.gain.value = 0
-  const humFilter = a.createBiquadFilter()
-  humFilter.type = 'lowpass'
-  humFilter.frequency.value = 420
-  hum.connect(humFilter).connect(humGain).connect(out(a))
-  hum.start()
-
-  const timer = setInterval(() => {
-    const s = Math.max(0, Math.min(1, getSpeed()))
-    const t = a.currentTime
-    // 빠를수록 바람이 높고 세게, 느려지면 낮고 조용하게
-    filter.frequency.setTargetAtTime(260 + 3000 * s * s, t, 0.06)
-    gain.gain.setTargetAtTime((0.02 + 0.26 * s) * MASTER, t, 0.06)
-    hum.frequency.setTargetAtTime(48 + 230 * s, t, 0.06)
-    humGain.gain.setTargetAtTime(0.09 * s * MASTER, t, 0.06)
-  }, 50)
-
-  spinLoop = { src, filter, gain, hum, humGain, timer }
-}
-
-/** 회전음 정지 — 0.35초에 걸쳐 사라진다 */
-export function stopSpinLoop(): void {
-  if (!spinLoop) return
-  const a = ac()
-  const { src, gain, hum, humGain, timer } = spinLoop
-  spinLoop = null
-  clearInterval(timer)
-  if (!a) return
-  const t = a.currentTime
-  gain.gain.cancelScheduledValues(t)
-  gain.gain.setTargetAtTime(0, t, 0.08)
-  humGain.gain.cancelScheduledValues(t)
-  humGain.gain.setTargetAtTime(0, t, 0.08)
-  try {
-    src.stop(t + 0.4)
-    hum.stop(t + 0.4)
-  } catch {
-    // 이미 멈춘 노드
+  const detune = 1 + (Math.random() - 0.5) * 0.1 // 핀마다 미세하게 다른 소리
+  // 1) 딱 — 날개가 핀을 때리는 아주 짧은 타격 노이즈
+  burst(0, 0.012, 0.17 + 0.05 * progress, 5200 + 1200 * progress)
+  // 2) 톡 — 플라스틱 날개의 짧은 울림 (음정 몸통)
+  beep((1450 + 700 * progress) * detune, 0.022, 'triangle', 0.15 + 0.05 * progress)
+  // 3) 둔탁한 저음 바디 — 판에 전달되는 진동
+  beep(330 * detune, 0.03, 'sine', 0.09)
+  if (progress > 0.8) {
+    // 멈추기 직전엔 저음 심장박동을 한 겹 더
+    beep(110 + 50 * progress, 0.07, 'sine', 0.12)
   }
 }
 

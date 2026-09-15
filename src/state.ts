@@ -61,7 +61,23 @@ const LS_SETTINGS = 'mr:settings'
 const LS_MENUS = 'mr:menus'
 const LS_HISTORY = 'mr:history'
 const LS_PAUSED = 'mr:paused'
+const LS_FEED = 'mr:feed'
+const LS_ROUND = 'mr:round'
 export const MAX_HISTORY = 20
+
+/** 새로고침해도 이어지도록 저장하는 진행 중 라운드 상태 */
+interface RoundState {
+  phase: Phase
+  winner: MenuItem | null
+  confirmedWinner: string | null
+  rerollCredits: number
+  rerollUsers: string[]
+  rerollCount: number
+  currentRerollCost: number | null
+  windowOpened: boolean
+  windowDeadline: number
+  windowDurationMs: number
+}
 
 type EventName = 'change' | 'tick' | 'winner' | 'armed' | 'donation' | 'confirmed'
 
@@ -91,6 +107,8 @@ export class Store {
   private windowTimer: ReturnType<typeof setInterval> | null = null
   /** 리롤 접수 마감 시각 (epoch ms) — UI가 10ms 단위 카운트다운을 그릴 때 직접 읽는다 */
   windowDeadline = 0
+  /** 이번 접수의 전체 길이(ms) — 접수 중 설정을 바꿔도 진행바 비율이 틀어지지 않게 시작 시점 값을 고정 */
+  windowDurationMs = 0
   private listeners = new Map<EventName, Set<(arg?: unknown) => void>>()
 
   constructor() {
@@ -112,33 +130,96 @@ export class Store {
 
   // ---- 영속화 ----
   private load(): void {
-    try {
-      const s = localStorage.getItem(LS_SETTINGS)
-      if (s) this.settings = { ...DEFAULT_SETTINGS, ...JSON.parse(s) }
-      // 개발자가 미리 심어둔 값이 있으면, 사용자가 직접 입력하지 않은 빈 칸을 채운다
-      if (!this.settings.clientId) this.settings.clientId = PRESET_CLIENT_ID
-      if (!this.settings.proxyUrl) this.settings.proxyUrl = PRESET_PROXY_URL
-      const m = localStorage.getItem(LS_MENUS)
-      if (m) {
-        this.menus = JSON.parse(m)
-        this.nextMenuId = Math.max(0, ...this.menus.map((x) => x.id)) + 1
+    // 항목별로 따로 감싸서, 하나가 손상돼도 나머지는 정상 복원되게 한다
+    const read = <T>(key: string, ok: (v: unknown) => v is T): T | null => {
+      try {
+        const raw = localStorage.getItem(key)
+        if (!raw) return null
+        const v: unknown = JSON.parse(raw)
+        return ok(v) ? v : null
+      } catch {
+        return null
       }
-      const h = localStorage.getItem(LS_HISTORY)
-      if (h) {
-        this.history = JSON.parse(h)
-        this.nextRoundId = Math.max(0, ...this.history.map((x) => x.id)) + 1
-      }
-      this.paused = localStorage.getItem(LS_PAUSED) === '1'
-    } catch {
-      // 손상된 저장값은 무시하고 기본값으로 시작
+    }
+    const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
+
+    const s = read<Record<string, unknown>>(LS_SETTINGS, isObj)
+    if (s) this.settings = { ...DEFAULT_SETTINGS, ...(s as Partial<Settings>) }
+    // 개발자가 미리 심어둔 값이 있으면, 사용자가 직접 입력하지 않은 빈 칸을 채운다
+    if (!this.settings.clientId) this.settings.clientId = PRESET_CLIENT_ID
+    if (!this.settings.proxyUrl) this.settings.proxyUrl = PRESET_PROXY_URL
+
+    const isArr = (v: unknown): v is unknown[] => Array.isArray(v)
+
+    const m = read<unknown[]>(LS_MENUS, isArr)
+    if (m) {
+      this.menus = m.filter(
+        (x): x is MenuItem => isObj(x) && typeof x.name === 'string' && typeof x.weight === 'number',
+      )
+      this.nextMenuId = Math.max(0, ...this.menus.map((x) => x.id)) + 1
+    }
+    const h = read<unknown[]>(LS_HISTORY, isArr)
+    if (h) {
+      this.history = h.filter(
+        (r): r is Round => isObj(r) && typeof r.winner === 'string' && Array.isArray(r.menus),
+      )
+      this.nextRoundId = Math.max(0, ...this.history.map((x) => x.id)) + 1
+    }
+    const f = read<unknown[]>(LS_FEED, isArr)
+    if (f) this.feed = f.filter((e): e is FeedEntry => isObj(e) && typeof e.text === 'string').slice(0, 200)
+    this.paused = localStorage.getItem(LS_PAUSED) === '1'
+
+    const r = read<Record<string, unknown>>(LS_ROUND, isObj)
+    if (r) this.restoreRound(r as unknown as RoundState)
+  }
+
+  /** 새로고침 전에 진행 중이던 라운드(당첨·리롤권·접수 상태)를 이어받는다 */
+  private restoreRound(r: RoundState): void {
+    if (r.phase !== 'decision' && r.phase !== 'window') return // 모집 중/스핀 중은 이어받을 게 없음
+    if (!r.winner) return
+    this.winner = r.winner
+    this.confirmedWinner = r.confirmedWinner ?? null
+    this.rerollCredits = Math.max(0, Number(r.rerollCredits) || 0)
+    this.rerollUsers = Array.isArray(r.rerollUsers) ? r.rerollUsers.map(String) : []
+    this.rerollCount = Math.max(0, Number(r.rerollCount) || 0)
+    this.currentRerollCost = typeof r.currentRerollCost === 'number' ? r.currentRerollCost : null
+    this.windowOpened = Boolean(r.windowOpened)
+    const remain = (Number(r.windowDeadline) || 0) - Date.now()
+    if (r.phase === 'window' && remain > 0) {
+      this.phase = 'window'
+      this.windowOpened = true
+      this.startWindowTimer(Number(r.windowDeadline), Number(r.windowDurationMs) || remain)
+      this.addFeed('info', '↻ 새로고침 — 리롤 접수를 이어서 진행합니다')
+    } else {
+      this.phase = 'decision'
+      if (r.phase === 'window') this.windowOpened = true // 접수 중에 새로고침했는데 이미 마감된 경우
+      this.addFeed('info', '↻ 새로고침 — 당첨 결과와 리롤권을 이어받았습니다')
     }
   }
+
+  private roundState(): RoundState {
+    return {
+      phase: this.phase,
+      winner: this.winner,
+      confirmedWinner: this.confirmedWinner,
+      rerollCredits: this.rerollCredits,
+      rerollUsers: this.rerollUsers,
+      rerollCount: this.rerollCount,
+      currentRerollCost: this.currentRerollCost,
+      windowOpened: this.windowOpened,
+      windowDeadline: this.windowDeadline,
+      windowDurationMs: this.windowDurationMs,
+    }
+  }
+
   private save(): void {
     try {
       localStorage.setItem(LS_SETTINGS, JSON.stringify(this.settings))
       localStorage.setItem(LS_MENUS, JSON.stringify(this.menus))
       localStorage.setItem(LS_HISTORY, JSON.stringify(this.history))
+      localStorage.setItem(LS_FEED, JSON.stringify(this.feed))
       localStorage.setItem(LS_PAUSED, this.paused ? '1' : '0')
+      localStorage.setItem(LS_ROUND, JSON.stringify(this.roundState()))
     } catch {
       // 저장 실패(용량 등)해도 앱 동작은 유지
     }
@@ -202,12 +283,20 @@ export class Store {
     this.changed()
   }
 
+  /** 룰렛 전체 비우기 — 후보뿐 아니라 진행 중 라운드(당첨·리롤권·접수 타이머)도 모집 상태로 되돌린다 */
   clearMenus(): void {
+    this.stopWindowTimer()
     this.menus = []
+    this.phase = 'collect'
     this.winner = null
+    this.pendingWinner = null
     this.confirmedWinner = null
     this.rerollCount = 0
-    this.addFeed('info', '🧹 룰렛 초기화')
+    this.rerollCredits = 0
+    this.rerollUsers = []
+    this.currentRerollCost = null
+    this.windowOpened = false
+    this.addFeed('info', '🧹 룰렛 초기화 — 후보와 진행 중 라운드를 모두 비웠습니다')
     this.changed()
   }
 
@@ -383,10 +472,15 @@ export class Store {
     this.changed()
   }
 
-  private startWindowTimer(): void {
+  /** 접수 타이머 시작. 인자를 주면(새로고침 복원) 그 마감 시각을 그대로 이어받는다 */
+  private startWindowTimer(
+    deadline = Date.now() + this.settings.rerollWindowSec * 1000,
+    durationMs = this.settings.rerollWindowSec * 1000,
+  ): void {
     this.stopWindowTimer()
-    this.windowDeadline = Date.now() + this.settings.rerollWindowSec * 1000
-    this.windowRemainMs = this.settings.rerollWindowSec * 1000
+    this.windowDeadline = deadline
+    this.windowDurationMs = durationMs
+    this.windowRemainMs = Math.max(0, deadline - Date.now())
     this.windowTimer = setInterval(() => {
       this.windowRemainMs = Math.max(0, this.windowDeadline - Date.now())
       this.emit('tick', this.windowRemainMs)

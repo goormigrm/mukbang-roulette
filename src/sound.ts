@@ -6,6 +6,8 @@
 
 let ctx: AudioContext | null = null
 let noiseBuf: AudioBuffer | null = null
+/** 모든 소리가 거치는 출력단 — 컴프레서로 겹칠 때(팡파레 등) 찌그러지는 클리핑을 막는다 */
+let master: AudioNode | null = null
 
 // 전체 음량 배율 — 개별 게인 값에 일괄 적용
 const MASTER = 1.6
@@ -20,6 +22,20 @@ function ac(): AudioContext | null {
   }
 }
 
+function out(a: AudioContext): AudioNode {
+  if (!master) {
+    const comp = a.createDynamicsCompressor()
+    comp.threshold.value = -12
+    comp.knee.value = 20
+    comp.ratio.value = 6
+    comp.attack.value = 0.003
+    comp.release.value = 0.12
+    comp.connect(a.destination)
+    master = comp
+  }
+  return master
+}
+
 function beep(freq: number, dur: number, type: OscillatorType, gainV: number, when = 0, slideTo?: number): void {
   const a = ac()
   if (!a) return
@@ -31,7 +47,7 @@ function beep(freq: number, dur: number, type: OscillatorType, gainV: number, wh
   if (slideTo !== undefined) osc.frequency.exponentialRampToValueAtTime(slideTo, t + dur)
   gain.gain.setValueAtTime(gainV * MASTER, t)
   gain.gain.exponentialRampToValueAtTime(0.0001, t + dur)
-  osc.connect(gain).connect(a.destination)
+  osc.connect(gain).connect(out(a))
   osc.start(t)
   osc.stop(t + dur)
 }
@@ -55,7 +71,7 @@ function burst(when: number, dur: number, gainV: number, filterFreq: number): vo
   const gain = a.createGain()
   gain.gain.setValueAtTime(gainV * MASTER, t)
   gain.gain.exponentialRampToValueAtTime(0.0001, t + dur)
-  src.connect(filter).connect(gain).connect(a.destination)
+  src.connect(filter).connect(gain).connect(out(a))
   src.start(t)
   src.stop(t + dur)
 }

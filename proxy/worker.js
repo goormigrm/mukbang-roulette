@@ -19,7 +19,8 @@
 // 다른 사이트에서 이 프록시를 못 쓰게 잠글 수 있다. 빈 배열이면 모두 허용.
 
 const UPSTREAM = 'https://openapi.chzzk.naver.com'
-const ALLOWED_ORIGINS = [] // 예: ['https://goormigrm.github.io']
+// 이 프록시를 쓸 수 있는 사이트 — 배포된 룰렛과 로컬 개발 서버만
+const ALLOWED_ORIGINS = ['https://goormigrm.github.io', 'http://localhost:5173']
 const ALLOWED_PATHS = /^\/(auth\/v1\/|open\/v1\/)/
 
 function corsHeaders(origin) {

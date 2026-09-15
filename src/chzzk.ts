@@ -22,6 +22,19 @@ let statusCb: (s: ChzzkStatus, detail?: string) => void = () => {}
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let reconnectDelay = 5000
 let manualOff = true
+/** connect()가 겹쳐 호출됐을 때 먼저 시작한 쪽이 뒤늦게 소켓을 여는 것을 막는 세대 번호 */
+let connectGen = 0
+/** 같은 사람·금액·메시지 이벤트가 이 시간 안에 다시 오면 네트워크 중복 전달로 보고 무시 */
+const DEDUPE_MS = 1000
+const recentDonations = new Map<string, number>()
+
+/** 리프레시 토큰까지 만료돼 다시 로그인해야 하는 상황 */
+class AuthExpiredError extends Error {
+  constructor() {
+    super('로그인이 만료되었습니다 — [치지직 로그인]을 다시 눌러주세요')
+    this.name = 'AuthExpiredError'
+  }
+}
 
 export function onStatus(cb: (s: ChzzkStatus, detail?: string) => void): void {
   statusCb = cb
@@ -63,7 +76,7 @@ export function redirectUri(): string {
 /** 치지직 계정 연동(OAuth) 페이지로 이동 */
 export function startLogin(): void {
   if (!store.settings.clientId) {
-    alert('설정에서 Client ID를 먼저 입력해주세요.')
+    alert('치지직 앱 정보(Client ID)가 사이트에 설정되지 않았습니다. 개발자에게 문의하세요 (src/config.ts).')
     return
   }
   const state = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
@@ -130,9 +143,19 @@ async function api<T>(path: string, init: RequestInit = {}, retry = true): Promi
       'Content-Type': 'application/json',
     },
   })
-  if (res.status === 401 && retry && t.refreshToken) {
-    saveTokens(await tokenRequest({ grantType: 'refresh_token', refreshToken: t.refreshToken }))
-    return api<T>(path, init, false)
+  if (res.status === 401) {
+    if (retry && t.refreshToken) {
+      try {
+        saveTokens(await tokenRequest({ grantType: 'refresh_token', refreshToken: t.refreshToken }))
+      } catch {
+        // 리프레시마저 거절 → 토큰을 지워 재로그인 경로를 열어주고, 재연결 루프는 멈춘다
+        saveTokens(null)
+        throw new AuthExpiredError()
+      }
+      return api<T>(path, init, false)
+    }
+    saveTokens(null)
+    throw new AuthExpiredError()
   }
   const json = (await res.json().catch(() => null)) as (T & { message?: string }) | null
   if (!res.ok) throw new Error(json?.message ?? `HTTP ${res.status}`)
@@ -144,8 +167,21 @@ function msg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
+/** 연결 과정의 실패 처리 — 로그인 만료면 멈추고(재로그인 필요), 그 외에는 백오프 재연결 */
+function handleFailure(e: unknown): void {
+  if (e instanceof AuthExpiredError) {
+    manualOff = true
+    disconnectSocket()
+    statusCb('error', e.message)
+    return
+  }
+  statusCb('error', msg(e))
+  scheduleReconnect()
+}
+
 /** 세션 연결 + 후원 이벤트 구독 */
 export async function connect(): Promise<void> {
+  const gen = ++connectGen
   manualOff = false
   if (reconnectTimer !== null) {
     clearTimeout(reconnectTimer)
@@ -155,12 +191,13 @@ export async function connect(): Promise<void> {
   statusCb('connecting', '세션 URL 요청 중...')
   try {
     const auth = await api<{ content?: { url?: string } }>('/open/v1/sessions/auth')
+    if (gen !== connectGen) return // 그 사이 다른 connect()가 시작됨 — 이쪽은 조용히 포기
     const url = auth.content?.url
     if (!url) throw new Error('세션 URL을 받지 못했습니다')
     openSocket(url)
   } catch (e) {
-    statusCb('error', msg(e))
-    scheduleReconnect()
+    if (gen !== connectGen) return
+    handleFailure(e)
   }
 }
 
@@ -199,9 +236,20 @@ function openSocket(url: string): void {
     const amount = Number(d.payAmount) || 0
     const nick = d.donatorNickname || '익명'
     const text = d.donationText ?? ''
+    const now = Date.now()
+    // 치지직 이벤트에는 고유 ID가 없다. 네트워크 중복 전달만 거르도록
+    // "같은 사람·금액·메시지가 1초 안에 두 번"인 경우만 중복으로 본다 — 시청자의 진짜 연타는 살린다
+    const key = `${nick}|${amount}|${text}`
+    const last = recentDonations.get(key)
+    if (last !== undefined && now - last < DEDUPE_MS) {
+      store.addFeed('skip', `[${nick}] ${amount.toLocaleString('ko-KR')}원 — 1초 내 동일 이벤트 중복 수신, 무시`)
+      store.emitChange()
+      return
+    }
+    recentDonations.set(key, now)
+    if (recentDonations.size > 500) recentDonations.clear()
     store.handleDonation({
-      // 동일인이 3초 안에 같은 금액·메시지를 중복 수신하는 경우만 걸러낸다
-      id: `chzzk|${nick}|${amount}|${text}|${Math.floor(Date.now() / 3000)}`,
+      id: `chzzk|${key}|${now}`,
       nick,
       amount,
       message: text,
@@ -231,7 +279,8 @@ async function subscribeDonation(sessionKey: string): Promise<void> {
       method: 'POST',
     })
   } catch (e) {
-    statusCb('error', `후원 구독 실패: ${msg(e)}`)
+    // 소켓만 열리고 구독이 안 된 채 방치되지 않도록 — 재연결(또는 로그인 만료 안내)로 넘긴다
+    handleFailure(e instanceof AuthExpiredError ? e : new Error(`후원 구독 실패: ${msg(e)}`))
   }
 }
 

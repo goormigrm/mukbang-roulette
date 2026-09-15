@@ -198,7 +198,7 @@ function renderStatus(): void {
     }
     case 'window': {
       const remain = Math.ceil(store.windowRemainMs / 1000)
-      const pct = (store.windowRemainMs / (s.rerollWindowSec * 1000)) * 100
+      const pct = (store.windowRemainMs / Math.max(1, store.windowDurationMs)) * 100
       const creditNote =
         store.rerollCredits > 0
           ? `<div class="armed-banner">🔄 리롤권 ×${store.rerollCredits} 누적! 시간이 끝날 때까지 계속 쌓입니다</div>`
@@ -301,7 +301,7 @@ store.on('tick', (remainMs) => {
   const fill = document.getElementById('timer-fill')
   const ms = remainMs as number
   if (sec) sec.textContent = String(Math.ceil(ms / 1000))
-  if (fill) fill.style.width = `${(ms / (store.settings.rerollWindowSec * 1000)) * 100}%`
+  if (fill) fill.style.width = `${(ms / Math.max(1, store.windowDurationMs)) * 100}%`
 
   // 째깍째깍 — 평소엔 1초 간격, 마지막 10초는 0.5초 간격으로 긴박하게
   if (!store.settings.sound || store.phase !== 'window') return
@@ -348,6 +348,26 @@ btnOpenWindow.addEventListener('click', () => {
 btnReroll.addEventListener('click', () => doSpin(true))
 btnConfirm.addEventListener('click', () => store.confirmResult())
 btnPause.addEventListener('click', () => store.togglePaused())
+
+// ---------- 키보드 단축키 (Space 돌리기·정지 / R 리롤 / Enter 확정) ----------
+function isTypingTarget(t: EventTarget | null): boolean {
+  return t instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)
+}
+document.addEventListener('keydown', (e) => {
+  if (isTypingTarget(e.target) || e.ctrlKey || e.altKey || e.metaKey) return
+  let target: HTMLButtonElement | null = null
+  if (e.code === 'Space') target = btnSpin
+  else if (e.code === 'KeyR') target = btnReroll
+  else if (e.code === 'Enter') target = btnConfirm
+  if (!target) return
+  e.preventDefault()
+  // 포커스가 버튼에 남아 있으면 브라우저 기본 동작으로 한 번 더 눌리는 걸 막는다
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  if (!target.hidden && !target.disabled) target.click()
+})
+document.addEventListener('keyup', (e) => {
+  if (e.code === 'Space' && !isTypingTarget(e.target)) e.preventDefault()
+})
 
 $('#btn-clear').addEventListener('click', () => {
   if (store.phase === 'spinning') return
@@ -532,11 +552,19 @@ btnChzzkLogout.addEventListener('click', () => {
 // ---------- 시작 ----------
 renderAll()
 updateAuthButtons()
+// 웹폰트가 늦게 도착하면 룰렛 라벨이 기본 폰트로 남으므로, 로드가 끝난 뒤 한 번 더 그린다
+if (document.fonts?.ready) {
+  void document.fonts.ready.then(() => {
+    if (!wheel.isSpinning) wheel.draw()
+  })
+}
 void (async () => {
   const loggedInNow = await chzzk.handleOAuthRedirect()
   updateAuthButtons()
   if (loggedInNow || (chzzk.hasToken() && store.settings.clientId)) void chzzk.connect()
 })()
 
-// 콘솔 디버깅용
-;(window as unknown as Record<string, unknown>).__store = store
+// 콘솔 디버깅용 (개발 서버에서만)
+if (import.meta.env.DEV) {
+  ;(window as unknown as Record<string, unknown>).__store = store
+}

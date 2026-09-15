@@ -46,6 +46,7 @@
           <button id="btn-reroll" class="btn-reroll" disabled>🔄 리롤</button>
           <button id="btn-confirm" class="btn-ghost" hidden>✅ 결과 확정</button>
         </div>
+        <p class="hint shortcut-hint">단축키: <b>Space</b> 돌리기·정지·다시 돌리기 · <b>R</b> 리롤 · <b>Enter</b> 결과 확정</p>
       </section>
 
       <aside class="side">
@@ -104,7 +105,7 @@
             <label>리롤 비용 (원, 단일 도네 기준) <input id="set-reroll-cost" type="number" step="1000" min="1000" /></label>
             <label>리롤 제한시간 (초) <input id="set-reroll-sec" type="number" min="1" /></label>
             <label>최소 인정 금액 (원) <input id="set-min-amount" type="number" step="500" min="0" /></label>
-            <label>1칸당 금액 (원) <input id="set-won-per-slot" type="number" step="500" min="500" /></label>
+            <label>1칸당 금액 (원) <input id="set-won-per-slot" type="number" min="1" /></label>
             <label class="check"><input id="set-sound" type="checkbox" /> 효과음 켜기</label>
           </div>
           <div class="card frame danger-card">

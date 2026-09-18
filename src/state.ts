@@ -17,10 +17,10 @@ export interface Round {
   menus: { name: string; weight: number; donors: string[] }[]
 }
 
-// collect(모집) → closing(모집 마감 카운트다운, 도네는 계속 반영) → spinning(회전)
-//   → decision(당첨 발표, 스트리머 선택 대기)
+// collect(모집) → closing(마감 카운트다운, 도네는 계속 반영) → closed(모집 마감, 도네 반영 중단)
+//   → spinning(회전, 스트리머가 [돌리기]를 눌러야 시작) → decision(당첨 발표, 스트리머 선택 대기)
 //   → window(리롤 도네 접수, 타이머는 끝까지 흐르고 그동안 리롤권이 계속 쌓임) → 확정 시 collect로
-export type Phase = 'collect' | 'closing' | 'spinning' | 'decision' | 'window'
+export type Phase = 'collect' | 'closing' | 'closed' | 'spinning' | 'decision' | 'window'
 
 export interface Settings {
   rerollCost: number
@@ -92,7 +92,7 @@ interface RoundState {
   countdownDurationMs: number
 }
 
-type EventName = 'change' | 'tick' | 'winner' | 'armed' | 'donation' | 'confirmed' | 'autospin'
+type EventName = 'change' | 'tick' | 'winner' | 'armed' | 'donation' | 'confirmed'
 
 export class Store {
   settings: Settings = { ...DEFAULT_SETTINGS }
@@ -375,6 +375,12 @@ export class Store {
       return
     }
 
+    // 모집 마감 후 도네는 이번 판에 반영하지 않는다
+    if (this.phase === 'closed') {
+      this.addFeed('skip', `[${d.nick}] ${won}원 — 모집이 마감되어 이번 판에는 반영되지 않습니다`)
+      return
+    }
+
     // 스핀 중 도네는 전부 무시
     if (this.phase === 'spinning') {
       this.addFeed('skip', `[${d.nick}] ${won}원 — 스핀 중에는 반영하지 않습니다`)
@@ -428,8 +434,8 @@ export class Store {
         'reroll',
         `🔄 리롤 사용! (남은 리롤권 ${this.rerollCredits}개) — 직전 당첨 메뉴 포함하여 다시 돌립니다`,
       )
-    } else if (this.phase === 'closing') {
-      // 마감 카운트다운 중 즉시 시작 — 새 판이므로 별도 안내 없이 바로 돈다
+    } else if (this.phase === 'closing' || this.phase === 'closed') {
+      // 모집 마감(또는 카운트다운 중) 상태에서 시작 — 이번 판의 첫 스핀이므로 별도 안내 없이 돈다
       this.stopCountdown()
     } else if (this.phase !== 'collect') {
       // 당첨 발표/리롤 대기 상태에서의 자유 재돌리기 — 이전 결과는 기록하지 않고 무시
@@ -510,9 +516,9 @@ export class Store {
       if (this.countdownRemainMs > 0) return
       this.stopCountdown()
       if (this.phase === 'closing') {
-        // 모집 마감 — 이 순간부터 도네는 메뉴에 반영되지 않고, 룰렛이 자동으로 돌기 시작한다
-        this.addFeed('info', '⏱ 모집 마감! 이후 도네는 이번 판에 반영되지 않습니다')
-        this.emit('autospin')
+        // 모집 마감 — 이 순간부터 도네는 메뉴에 반영되지 않는다. 스핀은 스트리머가 [돌리기]를 눌러야 시작.
+        this.phase = 'closed'
+        this.addFeed('info', '🔒 모집 마감! 이후 도네는 이번 판에 반영되지 않습니다 — [돌리기]를 누르세요')
       } else {
         // 리롤 접수는 마감돼도 자동 확정하지 않는다 — 연동 지연으로 늦게 도착하는 도네를
         // 확정 전까지 인정하고, 스트리머가 재접수/확정을 선택한다
@@ -533,12 +539,17 @@ export class Store {
   /** [⏱ 마감] — 모집 마감까지 N초. 이미 카운트다운 중이면 그만큼 연장한다(횟수 제한 없음).
    *  카운트다운 동안에도 도네는 정상적으로 메뉴에 반영된다 — 마감되는 순간부터 반영이 멈춘다. */
   startClosing(sec = this.settings.closingSec): void {
-    if (this.phase !== 'collect' && this.phase !== 'closing') return
+    if (this.phase !== 'collect' && this.phase !== 'closing' && this.phase !== 'closed') return
     if (this.menus.length < 1) return
     const add = Math.max(1, Math.floor(sec))
     if (this.phase === 'closing') {
       this.startCountdown(this.countdownDeadline + add * 1000, this.countdownDurationMs + add * 1000)
       this.addFeed('info', `⏱ 모집 마감 ${add}초 연장! 아직 기회가 있습니다`)
+    } else if (this.phase === 'closed') {
+      // 마감했다가 마음이 바뀌어 다시 받는 경우
+      this.phase = 'closing'
+      this.startCountdown(Date.now() + add * 1000, add * 1000)
+      this.addFeed('info', `⏱ 모집 재개! ${add}초 더 받습니다`)
     } else {
       this.phase = 'closing'
       this.startCountdown(Date.now() + add * 1000, add * 1000)

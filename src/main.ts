@@ -206,6 +206,9 @@ function renderStatus(): void {
         <div class="timer-track"><div class="timer-fill" id="timer-fill" style="width:${pct}%"></div></div>`
       break
     }
+    case 'closed':
+      html = `<div class="big reroll-note">🔒 모집 마감 — 더 이상 메뉴가 추가되지 않습니다. [돌리기!]를 누르세요</div>`
+      break
     case 'spinning':
       html = wheel.isStopping
         ? `<div class="big reroll-note">두구두구두구... 🥁</div>`
@@ -244,16 +247,21 @@ function renderButtons(): void {
     btnSpin.disabled = wheel.isStopping
     btnSpin.classList.add('stop-mode')
   } else {
-    btnSpin.textContent = store.phase === 'collect' ? '돌리기!' : '🔁 다시 돌리기'
+    // 이번 판의 결과가 이미 나온 뒤(당첨 발표·리롤 접수)에만 '다시 돌리기'로 바뀐다
+    const hasResult = store.phase === 'decision' || store.phase === 'window'
+    btnSpin.textContent = hasResult ? '🔁 다시 돌리기' : '돌리기!'
     btnSpin.disabled = store.menus.length < 1
     btnSpin.classList.remove('stop-mode')
   }
   const closingNow = store.phase === 'closing'
-  btnCloseEntry.hidden = !(store.phase === 'collect' || closingNow)
+  const closedNow = store.phase === 'closed'
+  btnCloseEntry.hidden = !(store.phase === 'collect' || closingNow || closedNow)
   btnCloseEntry.disabled = store.menus.length < 1
   btnCloseEntry.textContent = closingNow
     ? `⏱ +${store.settings.closingSec}초 연장`
-    : `⏱ ${store.settings.closingSec}초 후 마감`
+    : closedNow
+      ? `⏱ ${store.settings.closingSec}초 더 받기`
+      : `⏱ ${store.settings.closingSec}초 후 마감`
   btnOpenWindow.hidden = store.phase !== 'decision'
   btnOpenWindow.textContent = store.windowOpened ? '🔔 리롤 재접수 (금액 변경)' : '🔔 리롤 도네 받기'
   btnReroll.disabled = !(
@@ -431,7 +439,6 @@ store.on('armed', () => {
   if (store.settings.sound) sound.rerollChime()
 })
 store.on('donation', (d) => showDonationToast(d as AppliedDonation))
-store.on('autospin', () => doSpin(false)) // 모집 마감 카운트다운이 끝나면 자동으로 돌기 시작
 store.on('confirmed', () => {
   if (store.settings.sound) sound.finale()
 })

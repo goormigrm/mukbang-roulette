@@ -354,19 +354,20 @@ function renderOverlay(): void {
   elOverlay.hidden = elWinnerStamp.hidden && elBigTimer.hidden && elRerollBuyers.hidden
 }
 
-// 당첨 순간 컨페티 (클립용 연출)
-function confetti(count = 70): void {
+// 당첨 순간 컨페티 — 화면 전체에 색종이가 쏟아진다 (클립용 연출)
+function confetti(count = 140): void {
   for (let i = 0; i < count; i++) {
     const p = document.createElement('i')
-    p.className = 'confetti-piece'
+    p.className = i % 4 === 0 ? 'confetti-piece round' : 'confetti-piece'
     p.style.left = `${Math.random() * 100}%`
     p.style.background = segColor(i)
-    p.style.animationDelay = `${Math.random() * 0.35}s`
-    p.style.animationDuration = `${1.7 + Math.random() * 1.3}s`
-    p.style.setProperty('--x', `${Math.random() * 220 - 110}px`)
-    p.style.setProperty('--r', `${Math.random() * 900 - 450}deg`)
+    p.style.animationDelay = `${Math.random() * 0.5}s`
+    p.style.animationDuration = `${2.2 + Math.random() * 1.6}s`
+    p.style.setProperty('--x', `${Math.random() * 400 - 200}px`)
+    p.style.setProperty('--r', `${Math.random() * 1200 - 600}deg`)
+    p.style.setProperty('--s', `${0.7 + Math.random() * 0.9}`)
     elConfetti.appendChild(p)
-    setTimeout(() => p.remove(), 3400)
+    setTimeout(() => p.remove(), 4400)
   }
 }
 

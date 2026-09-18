@@ -173,20 +173,22 @@ export class RouletteWheel {
       ctx.fill()
     }
 
-    // 감속 막바지 — 포인터 아래 칸을 번쩍여 "여기 걸릴까?" 긴장을 만든다
+    // 감속 절반을 지나면 포인터 아래 칸을 번쩍여 "여기 걸릴까?" 긴장을 만든다.
+    // 멈추기 직전으로 갈수록 점점 세게 빛난다.
     if (this.mode === 'stopping') {
       const t = (performance.now() - this.stopStartAt) / this.stopDuration
-      if (t > 0.75) {
+      if (t > 0.5) {
+        const k = Math.min(1, (t - 0.5) / 0.5) // 번쩍임 강도 0 → 1
+        const blink = 0.6 + 0.4 * Math.abs(Math.sin(performance.now() / 85))
         const seg = segs[this.indexAtPointer()]
-        const pulse = 0.2 + 0.4 * Math.abs(Math.sin(performance.now() / 85))
         ctx.beginPath()
         ctx.moveTo(cx, cy)
         ctx.arc(cx, cy, R, seg.start + this.rotation, seg.end + this.rotation)
         ctx.closePath()
-        ctx.fillStyle = `rgba(255, 255, 255, ${pulse.toFixed(3)})`
+        ctx.fillStyle = `rgba(255, 255, 255, ${((0.18 + 0.34 * k) * blink).toFixed(3)})`
         ctx.fill()
         ctx.strokeStyle = '#FFFFFF'
-        ctx.lineWidth = 4
+        ctx.lineWidth = 3 + 3 * k
         ctx.stroke()
       }
     }

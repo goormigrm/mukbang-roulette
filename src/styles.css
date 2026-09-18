@@ -943,31 +943,38 @@ button {
   color: #fff;
 }
 
-/* 당첨 컨페티 */
+/* 당첨 컨페티 — 화면 전체에 색종이가 쏟아진다 */
 .confetti {
-  position: absolute;
+  position: fixed;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
+  z-index: 9999;
 }
 
 .confetti-piece {
   position: absolute;
-  top: -16px;
-  width: 10px;
-  height: 14px;
-  border-radius: 2px;
+  top: -30px;
+  width: 14px;
+  height: 22px;
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(14, 8, 8, 0.25);
   animation: confetti-fall linear forwards;
+}
+
+.confetti-piece.round {
+  border-radius: 50%;
+  height: 14px;
 }
 
 @keyframes confetti-fall {
   from {
-    transform: translate(0, 0) rotate(0);
+    transform: translate(0, 0) rotate(0) scale(var(--s, 1));
     opacity: 1;
   }
   to {
-    transform: translate(var(--x, 0), 105%) rotate(var(--r, 360deg));
-    opacity: 0.15;
+    transform: translate(var(--x, 0), 105vh) rotate(var(--r, 360deg)) scale(var(--s, 1));
+    opacity: 0.2;
   }
 }
 

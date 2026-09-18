@@ -17,13 +17,16 @@ export interface Round {
   menus: { name: string; weight: number; donors: string[] }[]
 }
 
-// collect(모집) → spinning(회전) → decision(당첨 발표, 스트리머 선택 대기)
+// collect(모집) → closing(모집 마감 카운트다운, 도네는 계속 반영) → spinning(회전)
+//   → decision(당첨 발표, 스트리머 선택 대기)
 //   → window(리롤 도네 접수, 타이머는 끝까지 흐르고 그동안 리롤권이 계속 쌓임) → 확정 시 collect로
-export type Phase = 'collect' | 'spinning' | 'decision' | 'window'
+export type Phase = 'collect' | 'closing' | 'spinning' | 'decision' | 'window'
 
 export interface Settings {
   rerollCost: number
   rerollWindowSec: number
+  /** [마감] 버튼 한 번에 주는 모집 마감 카운트다운 초 (다시 누르면 그만큼 연장) */
+  closingSec: number
   minAmount: number
   wonPerSlot: number
   sound: boolean
@@ -57,6 +60,7 @@ export interface DonationInput {
 export const DEFAULT_SETTINGS: Settings = {
   rerollCost: 20000,
   rerollWindowSec: 60,
+  closingSec: 30,
   minAmount: 1000,
   wonPerSlot: 1000,
   sound: true,
@@ -83,11 +87,12 @@ interface RoundState {
   rerollCount: number
   currentRerollCost: number | null
   windowOpened: boolean
-  windowDeadline: number
-  windowDurationMs: number
+  confirmedDonors?: string[]
+  countdownDeadline: number
+  countdownDurationMs: number
 }
 
-type EventName = 'change' | 'tick' | 'winner' | 'armed' | 'donation' | 'confirmed'
+type EventName = 'change' | 'tick' | 'winner' | 'armed' | 'donation' | 'confirmed' | 'autospin'
 
 export class Store {
   settings: Settings = { ...DEFAULT_SETTINGS }
@@ -98,11 +103,13 @@ export class Store {
   paused = false // 도네이션 반영 일시정지
   winner: MenuItem | null = null
   confirmedWinner: string | null = null
+  /** 확정된 당첨 메뉴를 추천한 사람들 (화면 표시용) */
+  confirmedDonors: string[] = []
   /** 사용 가능한 리롤권 수 (단일 도네 ≥ 리롤비용 1건당 1개 누적) */
   rerollCredits = 0
   rerollUsers: string[] = []
   rerollCount = 0
-  windowRemainMs = 0
+  countdownRemainMs = 0
   /** 이번 회차 리롤 비용 (접수 시작 시 입력, null이면 설정 기본값). 확정 시 초기화 */
   currentRerollCost: number | null = null
   /** 이번 당첨 결과에 대해 접수를 연 적이 있는지 — 마감 후 늦게 도착한 도네 인정용 */
@@ -112,11 +119,11 @@ export class Store {
   private seen = new Set<string>()
   private nextMenuId = 1
   private nextRoundId = 1
-  private windowTimer: ReturnType<typeof setInterval> | null = null
-  /** 리롤 접수 마감 시각 (epoch ms) — UI가 10ms 단위 카운트다운을 그릴 때 직접 읽는다 */
-  windowDeadline = 0
-  /** 이번 접수의 전체 길이(ms) — 접수 중 설정을 바꿔도 진행바 비율이 틀어지지 않게 시작 시점 값을 고정 */
-  windowDurationMs = 0
+  private countdownTimer: ReturnType<typeof setInterval> | null = null
+  /** 카운트다운 마감 시각 (epoch ms) — UI가 10ms 단위로 그릴 때 직접 읽는다 */
+  countdownDeadline = 0
+  /** 이번 카운트다운의 전체 길이(ms) — 도중에 설정을 바꿔도 진행바 비율이 틀어지지 않게 고정 */
+  countdownDurationMs = 0
   private listeners = new Map<EventName, Set<(arg?: unknown) => void>>()
 
   constructor() {
@@ -183,7 +190,12 @@ export class Store {
 
   /** 새로고침 전에 진행 중이던 라운드(당첨·리롤권·접수 상태)를 이어받는다 */
   private restoreRound(r: RoundState): void {
-    if (r.phase !== 'decision' && r.phase !== 'window') return // 모집 중/스핀 중은 이어받을 게 없음
+    this.confirmedDonors = Array.isArray(r.confirmedDonors) ? r.confirmedDonors.map(String) : []
+    // 모집 중이었다면 직전 확정 결과만 이어받는다 (마감 카운트다운은 잇지 않고 모집 상태로)
+    if (r.phase !== 'decision' && r.phase !== 'window') {
+      this.confirmedWinner = r.confirmedWinner ?? null
+      return
+    }
     if (!r.winner) return
     this.winner = r.winner
     this.confirmedWinner = r.confirmedWinner ?? null
@@ -192,11 +204,12 @@ export class Store {
     this.rerollCount = Math.max(0, Number(r.rerollCount) || 0)
     this.currentRerollCost = typeof r.currentRerollCost === 'number' ? r.currentRerollCost : null
     this.windowOpened = Boolean(r.windowOpened)
-    const remain = (Number(r.windowDeadline) || 0) - Date.now()
+    const deadline = Number(r.countdownDeadline) || 0
+    const remain = deadline - Date.now()
     if (r.phase === 'window' && remain > 0) {
       this.phase = 'window'
       this.windowOpened = true
-      this.startWindowTimer(Number(r.windowDeadline), Number(r.windowDurationMs) || remain)
+      this.startCountdown(deadline, Number(r.countdownDurationMs) || remain)
       this.addFeed('info', '↻ 새로고침 — 리롤 접수를 이어서 진행합니다')
     } else {
       this.phase = 'decision'
@@ -215,8 +228,9 @@ export class Store {
       rerollCount: this.rerollCount,
       currentRerollCost: this.currentRerollCost,
       windowOpened: this.windowOpened,
-      windowDeadline: this.windowDeadline,
-      windowDurationMs: this.windowDurationMs,
+      confirmedDonors: this.confirmedDonors,
+      countdownDeadline: this.countdownDeadline,
+      countdownDurationMs: this.countdownDurationMs,
     }
   }
 
@@ -293,7 +307,7 @@ export class Store {
 
   /** 룰렛 전체 비우기 — 후보뿐 아니라 진행 중 라운드(당첨·리롤권·접수 타이머)도 모집 상태로 되돌린다 */
   clearMenus(): void {
-    this.stopWindowTimer()
+    this.stopCountdown()
     this.menus = []
     this.phase = 'collect'
     this.winner = null
@@ -407,16 +421,19 @@ export class Store {
       if (this.rerollCredits < 1 || (this.phase !== 'decision' && this.phase !== 'window')) {
         return false
       }
-      this.stopWindowTimer()
+      this.stopCountdown()
       this.rerollCredits--
       this.rerollCount++
       this.addFeed(
         'reroll',
         `🔄 리롤 사용! (남은 리롤권 ${this.rerollCredits}개) — 직전 당첨 메뉴 포함하여 다시 돌립니다`,
       )
+    } else if (this.phase === 'closing') {
+      // 마감 카운트다운 중 즉시 시작 — 새 판이므로 별도 안내 없이 바로 돈다
+      this.stopCountdown()
     } else if (this.phase !== 'collect') {
       // 당첨 발표/리롤 대기 상태에서의 자유 재돌리기 — 이전 결과는 기록하지 않고 무시
-      this.stopWindowTimer()
+      this.stopCountdown()
       this.addFeed('info', '🔁 다시 돌리기 — 이전 결과를 무시하고 새로 돌립니다')
     }
 
@@ -467,6 +484,7 @@ export class Store {
    *  (예: 1차 2만원 → 2차 4만원 → 3차 10만원처럼 회차마다 올려 받는 운영) */
   startRerollWindow(cost?: number): void {
     if (this.phase !== 'decision') return
+    const sec = this.settings.rerollWindowSec
     if (cost !== undefined && Number.isFinite(cost) && cost >= 1000) {
       this.currentRerollCost = Math.floor(cost)
     }
@@ -476,46 +494,66 @@ export class Store {
       'reroll',
       `🔔 리롤 도네 접수 시작! ${this.settings.rerollWindowSec}초 안에 단일 도네 ${this.effectiveRerollCost().toLocaleString('ko-KR')}원 이상`,
     )
-    this.startWindowTimer()
+    this.startCountdown(Date.now() + sec * 1000, sec * 1000)
     this.changed()
   }
 
-  /** 접수 타이머 시작. 인자를 주면(새로고침 복원) 그 마감 시각을 그대로 이어받는다 */
-  private startWindowTimer(
-    deadline = Date.now() + this.settings.rerollWindowSec * 1000,
-    durationMs = this.settings.rerollWindowSec * 1000,
-  ): void {
-    this.stopWindowTimer()
-    this.windowDeadline = deadline
-    this.windowDurationMs = durationMs
-    this.windowRemainMs = Math.max(0, deadline - Date.now())
-    this.windowTimer = setInterval(() => {
-      this.windowRemainMs = Math.max(0, this.windowDeadline - Date.now())
-      this.emit('tick', this.windowRemainMs)
-      if (this.windowRemainMs <= 0) {
-        // 마감돼도 자동 확정하지 않는다 — 연동 지연으로 늦게 도착하는 리롤 도네를
+  /** 카운트다운 시작 (모집 마감 / 리롤 접수 공용). 인자를 주면 그 마감 시각을 그대로 이어받는다 */
+  private startCountdown(deadline: number, durationMs: number): void {
+    this.stopCountdown()
+    this.countdownDeadline = deadline
+    this.countdownDurationMs = durationMs
+    this.countdownRemainMs = Math.max(0, deadline - Date.now())
+    this.countdownTimer = setInterval(() => {
+      this.countdownRemainMs = Math.max(0, this.countdownDeadline - Date.now())
+      this.emit('tick', this.countdownRemainMs)
+      if (this.countdownRemainMs > 0) return
+      this.stopCountdown()
+      if (this.phase === 'closing') {
+        // 모집 마감 — 이 순간부터 도네는 메뉴에 반영되지 않고, 룰렛이 자동으로 돌기 시작한다
+        this.addFeed('info', '⏱ 모집 마감! 이후 도네는 이번 판에 반영되지 않습니다')
+        this.emit('autospin')
+      } else {
+        // 리롤 접수는 마감돼도 자동 확정하지 않는다 — 연동 지연으로 늦게 도착하는 도네를
         // 확정 전까지 인정하고, 스트리머가 재접수/확정을 선택한다
-        this.stopWindowTimer()
         this.phase = 'decision'
         this.addFeed('info', '⏱ 리롤 접수 마감 — 늦게 도착한 리롤 도네도 확정 전까지 인정됩니다')
-        this.changed()
       }
+      this.changed()
     }, 200)
   }
 
-  private stopWindowTimer(): void {
-    if (this.windowTimer !== null) {
-      clearInterval(this.windowTimer)
-      this.windowTimer = null
+  private stopCountdown(): void {
+    if (this.countdownTimer !== null) {
+      clearInterval(this.countdownTimer)
+      this.countdownTimer = null
     }
+  }
+
+  /** [⏱ 마감] — 모집 마감까지 N초. 이미 카운트다운 중이면 그만큼 연장한다(횟수 제한 없음).
+   *  카운트다운 동안에도 도네는 정상적으로 메뉴에 반영된다 — 마감되는 순간부터 반영이 멈춘다. */
+  startClosing(sec = this.settings.closingSec): void {
+    if (this.phase !== 'collect' && this.phase !== 'closing') return
+    if (this.menus.length < 1) return
+    const add = Math.max(1, Math.floor(sec))
+    if (this.phase === 'closing') {
+      this.startCountdown(this.countdownDeadline + add * 1000, this.countdownDurationMs + add * 1000)
+      this.addFeed('info', `⏱ 모집 마감 ${add}초 연장! 아직 기회가 있습니다`)
+    } else {
+      this.phase = 'closing'
+      this.startCountdown(Date.now() + add * 1000, add * 1000)
+      this.addFeed('info', `⏱ ${add}초 뒤 모집 마감 — 지금이 마지막 기회!`)
+    }
+    this.changed()
   }
 
   /** 결과 확정 (확정 버튼) → 라운드 기록 저장 */
   confirmResult(): void {
     if (this.phase !== 'decision' && this.phase !== 'window') return
-    this.stopWindowTimer()
+    this.stopCountdown()
     const winnerName = this.winner?.name ?? '?'
     this.confirmedWinner = winnerName
+    this.confirmedDonors = [...(this.winner?.donors ?? [])]
     if (this.rerollCredits > 0) {
       this.addFeed('info', `남은 리롤권 ${this.rerollCredits}개는 확정과 함께 소멸됩니다`)
     }
@@ -536,6 +574,7 @@ export class Store {
     this.rerollUsers = []
     this.currentRerollCost = null
     this.windowOpened = false
+    this.countdownRemainMs = 0
     this.emit('confirmed', winnerName)
     this.changed()
   }

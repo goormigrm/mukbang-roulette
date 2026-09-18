@@ -50,6 +50,10 @@ const btnOpenWindow = $<HTMLButtonElement>('#btn-open-window')
 const btnReroll = $<HTMLButtonElement>('#btn-reroll')
 const btnConfirm = $<HTMLButtonElement>('#btn-confirm')
 const btnPause = $<HTMLButtonElement>('#btn-pause')
+const btnCloseEntry = $<HTMLButtonElement>('#btn-close-entry')
+const elWinnerStamp = $('#winner-stamp')
+const elWinnerDonors = $('#winner-donors')
+const elConfetti = $('#confetti')
 
 function renderPause(): void {
   btnPause.textContent = store.paused ? '⏸ 도네 반영 정지됨' : '▶ 도네 반영 중'
@@ -194,6 +198,14 @@ function renderStatus(): void {
         ? `<div class="big">오늘의 메뉴: <b>${escapeHtml(store.confirmedWinner)}</b> 🎉</div>`
         : `<div class="muted">도네이션 ${s.wonPerSlot.toLocaleString('ko-KR')}원당 1칸 · 후보가 들어오면 돌릴 수 있어요</div>`
       break
+    case 'closing': {
+      const remain = Math.ceil(store.countdownRemainMs / 1000)
+      const pct = (store.countdownRemainMs / Math.max(1, store.countdownDurationMs)) * 100
+      html = `
+        <div class="big reroll-note">⏱ <span id="remain-sec">${remain}</span>초 뒤 마감! 지금 쏘는 메뉴까지만 룰렛에 들어갑니다</div>
+        <div class="timer-track"><div class="timer-fill" id="timer-fill" style="width:${pct}%"></div></div>`
+      break
+    }
     case 'spinning':
       html = wheel.isStopping
         ? `<div class="big reroll-note">두구두구두구... 🥁</div>`
@@ -210,8 +222,8 @@ function renderStatus(): void {
       break
     }
     case 'window': {
-      const remain = Math.ceil(store.windowRemainMs / 1000)
-      const pct = (store.windowRemainMs / Math.max(1, store.windowDurationMs)) * 100
+      const remain = Math.ceil(store.countdownRemainMs / 1000)
+      const pct = (store.countdownRemainMs / Math.max(1, store.countdownDurationMs)) * 100
       const creditNote =
         store.rerollCredits > 0
           ? `<div class="armed-banner">🔄 리롤권 ×${store.rerollCredits} 누적! 시간이 끝날 때까지 계속 쌓입니다</div>`
@@ -236,6 +248,12 @@ function renderButtons(): void {
     btnSpin.disabled = store.menus.length < 1
     btnSpin.classList.remove('stop-mode')
   }
+  const closingNow = store.phase === 'closing'
+  btnCloseEntry.hidden = !(store.phase === 'collect' || closingNow)
+  btnCloseEntry.disabled = store.menus.length < 1
+  btnCloseEntry.textContent = closingNow
+    ? `⏱ +${store.settings.closingSec}초 연장`
+    : `⏱ ${store.settings.closingSec}초 후 마감`
   btnOpenWindow.hidden = store.phase !== 'decision'
   btnOpenWindow.textContent = store.windowOpened ? '🔔 리롤 재접수 (금액 변경)' : '🔔 리롤 도네 받기'
   btnReroll.disabled = !(
@@ -282,17 +300,49 @@ function showDonationToast(d: AppliedDonation): void {
   }, 3500)
 }
 
+function setDonors(donors: string[]): void {
+  // '수동'은 스트리머가 직접 넣은 것이므로 추천자로 보여주지 않는다
+  const names = donors.filter((n) => n !== '수동')
+  if (names.length === 0) {
+    elWinnerDonors.hidden = true
+    return
+  }
+  elWinnerDonors.textContent = `🙌 쏜 사람: ${names.join(' · ')}`
+  elWinnerDonors.hidden = false
+}
+
 function renderOverlay(): void {
   const showLive = (store.phase === 'decision' || store.phase === 'window') && store.winner
   const showConfirmed = store.phase === 'collect' && store.confirmedWinner
   if (showLive) {
     elWinnerName.textContent = store.winner!.name
-    elOverlay.hidden = false
+    setDonors(store.winner!.donors)
+    elWinnerStamp.hidden = false
   } else if (showConfirmed) {
     elWinnerName.textContent = store.confirmedWinner!
-    elOverlay.hidden = false
+    setDonors(store.confirmedDonors)
+    elWinnerStamp.hidden = false
   } else {
-    elOverlay.hidden = true
+    // 마감 카운트다운·스핀 중에는 지난 판의 도장을 감춘다
+    elWinnerStamp.hidden = true
+  }
+  // 도장·타이머·리롤권 카드 중 하나라도 보이면 오버레이를 띄운다
+  elOverlay.hidden = elWinnerStamp.hidden && elBigTimer.hidden && elRerollBuyers.hidden
+}
+
+// 당첨 순간 컨페티 (클립용 연출)
+function confetti(count = 70): void {
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement('i')
+    p.className = 'confetti-piece'
+    p.style.left = `${Math.random() * 100}%`
+    p.style.background = segColor(i)
+    p.style.animationDelay = `${Math.random() * 0.35}s`
+    p.style.animationDuration = `${1.7 + Math.random() * 1.3}s`
+    p.style.setProperty('--x', `${Math.random() * 220 - 110}px`)
+    p.style.setProperty('--r', `${Math.random() * 900 - 450}deg`)
+    elConfetti.appendChild(p)
+    setTimeout(() => p.remove(), 3400)
   }
 }
 
@@ -310,20 +360,25 @@ function fmtRemain(ms: number): string {
   return `${s}.${String(cs).padStart(2, '0')}`
 }
 
+function countdownActive(): boolean {
+  return store.phase === 'window' || store.phase === 'closing'
+}
+
 function bigTimerFrame(): void {
-  if (store.phase !== 'window') {
+  if (!countdownActive()) {
     elBigTimer.hidden = true
     return
   }
-  const remain = Math.max(0, store.windowDeadline - Date.now())
+  const remain = Math.max(0, store.countdownDeadline - Date.now())
   elBigTimer.textContent = fmtRemain(remain)
   elBigTimer.classList.toggle('urgent', remain <= 10_000)
+  elBigTimer.classList.toggle('closing', store.phase === 'closing')
   bigTimerRaf = requestAnimationFrame(bigTimerFrame)
 }
 
 function renderBigTimer(): void {
   cancelAnimationFrame(bigTimerRaf)
-  if (store.phase === 'window') {
+  if (countdownActive()) {
     elBigTimer.hidden = false
     bigTimerFrame()
   } else {
@@ -338,9 +393,9 @@ function renderAll(): void {
   renderHistory()
   renderStatus()
   renderButtons()
-  renderOverlay()
   renderRerollBuyers()
   renderBigTimer()
+  renderOverlay()
   if (!wheel.isSpinning) wheel.draw()
 }
 
@@ -351,10 +406,10 @@ store.on('tick', (remainMs) => {
   const fill = document.getElementById('timer-fill')
   const ms = remainMs as number
   if (sec) sec.textContent = String(Math.ceil(ms / 1000))
-  if (fill) fill.style.width = `${(ms / Math.max(1, store.windowDurationMs)) * 100}%`
+  if (fill) fill.style.width = `${(ms / Math.max(1, store.countdownDurationMs)) * 100}%`
 
   // 째깍째깍 — 평소엔 1초 간격, 마지막 10초는 0.5초 간격으로 긴박하게
-  if (!store.settings.sound || store.phase !== 'window') return
+  if (!store.settings.sound || !countdownActive()) return
   if (ms <= 0) {
     lastClockUnit = -1
     sound.timeUp()
@@ -369,12 +424,14 @@ store.on('tick', (remainMs) => {
 })
 store.on('winner', () => {
   sound.stopDrumroll()
+  confetti()
   if (store.settings.sound) sound.fanfare()
 })
 store.on('armed', () => {
   if (store.settings.sound) sound.rerollChime()
 })
 store.on('donation', (d) => showDonationToast(d as AppliedDonation))
+store.on('autospin', () => doSpin(false)) // 모집 마감 카운트다운이 끝나면 자동으로 돌기 시작
 store.on('confirmed', () => {
   if (store.settings.sound) sound.finale()
 })
@@ -384,6 +441,7 @@ btnSpin.addEventListener('click', () => {
   if (store.phase === 'spinning') doStop()
   else doSpin(false)
 })
+btnCloseEntry.addEventListener('click', () => store.startClosing())
 btnOpenWindow.addEventListener('click', () => {
   // 회차마다 리롤 금액을 올려 받는 운영(2만 → 4만 → 10만)을 위해 접수 시작 시 금액 입력
   const def = store.effectiveRerollCost()
@@ -427,7 +485,6 @@ $('#btn-clear').addEventListener('click', () => {
   if (store.phase === 'spinning') return
   if (confirm('후보 목록을 전부 비울까요? (기록 탭의 지난 라운드는 유지됩니다)')) {
     store.clearMenus()
-    activateTab('current')
   }
 })
 
@@ -526,6 +583,7 @@ $<HTMLInputElement>('#import-file').addEventListener('change', async (e) => {
 function initSettingsInputs(): void {
   $<HTMLInputElement>('#set-reroll-cost').value = String(store.settings.rerollCost)
   $<HTMLInputElement>('#set-reroll-sec').value = String(store.settings.rerollWindowSec)
+  $<HTMLInputElement>('#set-closing-sec').value = String(store.settings.closingSec)
   $<HTMLInputElement>('#set-min-amount').value = String(store.settings.minAmount)
   $<HTMLInputElement>('#set-won-per-slot').value = String(store.settings.wonPerSlot)
   $<HTMLInputElement>('#set-sound').checked = store.settings.sound
@@ -543,6 +601,7 @@ function applySettingsInputs(): void {
     rerollCost: Math.max(1000, Math.floor(num('#set-reroll-cost', 20000))),
     // 상한 없음, 0초 방지만
     rerollWindowSec: Math.max(1, Math.floor(num('#set-reroll-sec', 60))),
+    closingSec: Math.max(1, Math.floor(num('#set-closing-sec', 30))),
     // 0원 설정 가능 (모든 도네 인정)
     minAmount: Math.max(0, Math.floor(num('#set-min-amount', 1000))),
     // 0 나눗셈 방지만
@@ -551,7 +610,7 @@ function applySettingsInputs(): void {
   })
 }
 
-for (const id of ['#set-reroll-cost', '#set-reroll-sec', '#set-min-amount', '#set-won-per-slot', '#set-sound']) {
+for (const id of ['#set-reroll-cost', '#set-reroll-sec', '#set-closing-sec', '#set-min-amount', '#set-won-per-slot', '#set-sound']) {
   $(id).addEventListener('change', applySettingsInputs)
 }
 initSettingsInputs()

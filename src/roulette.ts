@@ -166,6 +166,24 @@ export class RouletteWheel {
       ctx.fill()
     }
 
+    // 감속 막바지 — 포인터 아래 칸을 번쩍여 "여기 걸릴까?" 긴장을 만든다
+    if (this.mode === 'stopping') {
+      const t = (performance.now() - this.stopStartAt) / this.stopDuration
+      if (t > 0.75) {
+        const seg = segs[this.indexAtPointer()]
+        const pulse = 0.2 + 0.4 * Math.abs(Math.sin(performance.now() / 85))
+        ctx.beginPath()
+        ctx.moveTo(cx, cy)
+        ctx.arc(cx, cy, R, seg.start + this.rotation, seg.end + this.rotation)
+        ctx.closePath()
+        ctx.fillStyle = `rgba(255, 255, 255, ${pulse.toFixed(3)})`
+        ctx.fill()
+        ctx.strokeStyle = '#FFFFFF'
+        ctx.lineWidth = 4
+        ctx.stroke()
+      }
+    }
+
     // 원판 외곽선 (확장처럼 얇은 진회색 한 겹)
     ctx.beginPath()
     ctx.arc(cx, cy, R, 0, TAU)

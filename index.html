@@ -38,18 +38,21 @@
         <div class="wheel-wrap">
           <canvas id="wheel"></canvas>
           <div id="winner-overlay" class="winner-overlay" hidden>
-            <div class="stamp">
+            <div class="stamp" id="winner-stamp">
               <span class="stamp-label">오늘의 메뉴</span>
               <span id="winner-name"></span>
+              <span id="winner-donors" class="winner-donors" hidden></span>
             </div>
             <div id="big-timer" class="big-timer" hidden></div>
             <div id="reroll-buyers" class="reroll-buyers" hidden></div>
           </div>
           <div id="toast-area" class="toast-area"></div>
+          <div id="confetti" class="confetti"></div>
         </div>
         <div id="status-bar" class="status-bar"></div>
         <div class="controls">
           <button id="btn-spin" class="btn-primary">돌리기!</button>
+          <button id="btn-close-entry" class="btn-reroll">⏱ 30초 후 마감</button>
           <button id="btn-open-window" class="btn-reroll" hidden>🔔 리롤 도네 받기</button>
           <button id="btn-reroll" class="btn-reroll" disabled>🔄 리롤</button>
           <button id="btn-confirm" class="btn-ghost" hidden>✅ 결과 확정</button>
@@ -77,6 +80,9 @@
             <div class="row">
               <button id="btn-export-menus" class="btn-small">💾 메뉴 내보내기</button>
               <label class="btn-small file-label">📂 메뉴 불러오기<input id="import-menus-file" type="file" accept="application/json,.json" hidden /></label>
+            </div>
+            <div class="row">
+              <button type="button" id="btn-clear" class="btn-small danger">🧹 룰렛 전체 비우기 (기록은 유지)</button>
             </div>
           </div>
 
@@ -113,13 +119,10 @@
             <h2>룰렛 규칙 <span class="muted small-text">(변경 즉시 저장)</span></h2>
             <label>리롤 비용 (원, 단일 도네 기준) <input id="set-reroll-cost" type="number" step="1000" min="1000" /></label>
             <label>리롤 제한시간 (초) <input id="set-reroll-sec" type="number" min="1" /></label>
+            <label>모집 마감 카운트다운 (초) <input id="set-closing-sec" type="number" min="1" /></label>
             <label>최소 인정 금액 (원) <input id="set-min-amount" type="number" step="500" min="0" /></label>
             <label>1칸당 금액 (원) <input id="set-won-per-slot" type="number" min="1" /></label>
             <label class="check"><input id="set-sound" type="checkbox" /> 효과음 켜기</label>
-          </div>
-          <div class="card frame danger-card">
-            <h2 class="danger-title">⚠ 위험 구역</h2>
-            <button type="button" id="btn-clear" class="btn-ghost small">🧹 룰렛 전체 비우기 (기록은 유지)</button>
           </div>
         </section>
       </aside>

@@ -3,3 +3,9 @@ dist/
 *.local
 .DS_Store
 .claude/
+
+# 패치노트용 GIF는 용량이 커서 커밋하지 않는다 (tools/capture-gif로 다시 생성)
+docs/*.gif
+tools/capture-gif/node_modules/
+tools/capture-gif/*.gif
+tools/capture-gif/sample-*.png

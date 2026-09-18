@@ -1,0 +1,11 @@
+{
+  "name": "mukbang-roulette-gif-capture",
+  "private": true,
+  "type": "module",
+  "description": "패치노트용 당첨 연출 GIF 캡처 (README 참고)",
+  "dependencies": {
+    "gifenc": "^1.0.3",
+    "playwright": "^1.47.0",
+    "pngjs": "^7.0.0"
+  }
+}

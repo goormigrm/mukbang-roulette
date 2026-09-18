@@ -970,3 +970,12 @@ button {
     opacity: 0.15;
   }
 }
+
+/* 당첨 확률 — 추첨이 칸 수 비율대로 이뤄졌음을 시청자가 확인하게 */
+.winner-chance {
+  margin-top: 2px;
+  font-size: 19px;
+  font-weight: 900;
+  color: var(--red-deep);
+  letter-spacing: 0.5px;
+}

@@ -39,6 +39,8 @@ type SpinMode = 'idle' | 'free' | 'stopping'
 
 const MAX_SPEED = TAU * 2.7 // 자유 회전 속도 (rad/s)
 const ACCEL_MS = 800 // 최고 속도 도달 시간
+/** [돌리기] 직후 이 시간 동안은 정지할 수 없다 — 거의 돌지 않고 끝나 보이는 것을 막는다 */
+export const MIN_SPIN_MS = 1000
 // 딸깍 소리용 가상 핀 개수 — 메뉴가 이보다 적으면 실제 돌림판처럼 일정한 리듬으로 딸깍이고,
 // 더 많으면 칸 하나하나가 핀이 되어 빽빽할수록 따다다닥이 촘촘해진다 (라벨 전환과 딸깍이 일치)
 const PEGS = 24
@@ -82,6 +84,11 @@ export class RouletteWheel {
 
   get isStopping(): boolean {
     return this.mode === 'stopping'
+  }
+
+  /** 최소 회전 시간을 채워 이제 정지할 수 있는지 */
+  get canStop(): boolean {
+    return this.mode === 'free' && performance.now() - this.freeStartAt >= MIN_SPIN_MS
   }
 
   /** 현재 회전각이 몇 번째 가상 핀 구간에 있는지 (딸깍 트리거용) */

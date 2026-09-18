@@ -1,7 +1,7 @@
 import './styles.css'
 import { store } from './state'
 import type { AppliedDonation, MenuItem, Round } from './state'
-import { RouletteWheel, segColor } from './roulette'
+import { MIN_SPIN_MS, RouletteWheel, segColor } from './roulette'
 import * as sound from './sound'
 import * as chzzk from './chzzk'
 
@@ -20,6 +20,8 @@ const wheel = new RouletteWheel(
 function doSpin(useCredit = false): void {
   if (!store.beginSpin(useCredit)) return
   wheel.startFreeSpin()
+  // 최소 회전 시간이 지나면 [정지!]를 켜준다 (그 사이엔 스토어 변경이 없어 자동 리렌더가 안 되므로)
+  setTimeout(renderButtons, MIN_SPIN_MS + 30)
 }
 
 function doStop(): void {
@@ -53,6 +55,7 @@ const btnPause = $<HTMLButtonElement>('#btn-pause')
 const btnCloseEntry = $<HTMLButtonElement>('#btn-close-entry')
 const elWinnerStamp = $('#winner-stamp')
 const elWinnerDonors = $('#winner-donors')
+const elWinnerChance = $('#winner-chance')
 const elConfetti = $('#confetti')
 
 function renderPause(): void {
@@ -167,7 +170,8 @@ function renderHistory(): void {
     left.textContent = `${fmtDate(r.endedAt)} · ${r.menus.length}종`
     const right = document.createElement('span')
     right.className = 'win'
-    right.textContent = `🏆 ${r.winner}${r.rerollCount > 0 ? ` (리롤 ${r.rerollCount}회)` : ''}`
+    const chance = r.chance ? ` ${r.chance.toFixed(1)}%` : ''
+    right.textContent = `🏆 ${r.winner}${chance}${r.rerollCount > 0 ? ` (리롤 ${r.rerollCount}회)` : ''}`
     head.append(caret, left, right)
 
     const menus = document.createElement('ul')
@@ -244,7 +248,8 @@ function renderStatus(): void {
 function renderButtons(): void {
   if (store.phase === 'spinning') {
     btnSpin.textContent = wheel.isStopping ? '두구두구...' : '🛑 정지!'
-    btnSpin.disabled = wheel.isStopping
+    // 돌자마자 멈추면 거의 돌지 않은 채 끝나 보이므로 최소 1초는 돌게 한다
+    btnSpin.disabled = wheel.isStopping || !wheel.canStop
     btnSpin.classList.add('stop-mode')
   } else {
     // 이번 판의 결과가 이미 나온 뒤(당첨 발표·리롤 접수)에만 '다시 돌리기'로 바뀐다
@@ -308,6 +313,15 @@ function showDonationToast(d: AppliedDonation): void {
   }, 3500)
 }
 
+function setChance(chance: number): void {
+  if (!chance) {
+    elWinnerChance.hidden = true
+    return
+  }
+  elWinnerChance.textContent = `당첨 확률 ${chance.toFixed(2)}%`
+  elWinnerChance.hidden = false
+}
+
 function setDonors(donors: string[]): void {
   // '수동'은 스트리머가 직접 넣은 것이므로 추천자로 보여주지 않는다
   const names = donors.filter((n) => n !== '수동')
@@ -324,10 +338,12 @@ function renderOverlay(): void {
   const showConfirmed = store.phase === 'collect' && store.confirmedWinner
   if (showLive) {
     elWinnerName.textContent = store.winner!.name
+    setChance(store.winnerChance)
     setDonors(store.winner!.donors)
     elWinnerStamp.hidden = false
   } else if (showConfirmed) {
     elWinnerName.textContent = store.confirmedWinner!
+    setChance(store.confirmedChance)
     setDonors(store.confirmedDonors)
     elWinnerStamp.hidden = false
   } else {

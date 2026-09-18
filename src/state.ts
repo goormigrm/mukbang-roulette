@@ -13,6 +13,8 @@ export interface Round {
   id: number
   endedAt: string // ISO
   winner: string
+  /** 당첨 당시 그 메뉴의 확률(%) — 확률대로 뽑혔음을 나중에도 확인할 수 있게 남긴다 */
+  chance?: number
   rerollCount: number
   menus: { name: string; weight: number; donors: string[] }[]
 }
@@ -88,6 +90,8 @@ interface RoundState {
   currentRerollCost: number | null
   windowOpened: boolean
   confirmedDonors?: string[]
+  confirmedChance?: number
+  winnerChance?: number
   countdownDeadline: number
   countdownDurationMs: number
 }
@@ -105,6 +109,9 @@ export class Store {
   confirmedWinner: string | null = null
   /** 확정된 당첨 메뉴를 추천한 사람들 (화면 표시용) */
   confirmedDonors: string[] = []
+  /** 당첨 당시 그 메뉴의 확률(%) — 추첨이 칸 수 비율대로 이뤄졌음을 화면에서 보여준다 */
+  winnerChance = 0
+  confirmedChance = 0
   /** 사용 가능한 리롤권 수 (단일 도네 ≥ 리롤비용 1건당 1개 누적) */
   rerollCredits = 0
   rerollUsers: string[] = []
@@ -191,6 +198,8 @@ export class Store {
   /** 새로고침 전에 진행 중이던 라운드(당첨·리롤권·접수 상태)를 이어받는다 */
   private restoreRound(r: RoundState): void {
     this.confirmedDonors = Array.isArray(r.confirmedDonors) ? r.confirmedDonors.map(String) : []
+    this.confirmedChance = Number(r.confirmedChance) || 0
+    this.winnerChance = Number(r.winnerChance) || 0
     // 모집 중이었다면 직전 확정 결과만 이어받는다 (마감 카운트다운은 잇지 않고 모집 상태로)
     if (r.phase !== 'decision' && r.phase !== 'window') {
       this.confirmedWinner = r.confirmedWinner ?? null
@@ -229,6 +238,8 @@ export class Store {
       currentRerollCost: this.currentRerollCost,
       windowOpened: this.windowOpened,
       confirmedDonors: this.confirmedDonors,
+      confirmedChance: this.confirmedChance,
+      winnerChance: this.winnerChance,
       countdownDeadline: this.countdownDeadline,
       countdownDurationMs: this.countdownDurationMs,
     }
@@ -474,7 +485,9 @@ export class Store {
     if (this.phase !== 'spinning' || !this.pendingWinner) return
     this.winner = this.pendingWinner
     this.pendingWinner = null
-    this.addFeed('win', `🎉 당첨: "${this.winner.name}"`)
+    const total = this.totalWeight()
+    this.winnerChance = total > 0 ? (this.winner.weight / total) * 100 : 0
+    this.addFeed('win', `🎉 당첨: "${this.winner.name}" (확률 ${this.winnerChance.toFixed(2)}%)`)
     this.emit('winner', this.winner)
     this.windowOpened = false // 새 결과 — 접수 이력 초기화 (리롤 비용·잔여 리롤권은 확정 전까지 유지)
     this.phase = 'decision'
@@ -565,6 +578,7 @@ export class Store {
     const winnerName = this.winner?.name ?? '?'
     this.confirmedWinner = winnerName
     this.confirmedDonors = [...(this.winner?.donors ?? [])]
+    this.confirmedChance = this.winnerChance
     if (this.rerollCredits > 0) {
       this.addFeed('info', `남은 리롤권 ${this.rerollCredits}개는 확정과 함께 소멸됩니다`)
     }
@@ -574,6 +588,7 @@ export class Store {
       id: this.nextRoundId++,
       endedAt: new Date().toISOString(),
       winner: winnerName,
+      chance: this.winnerChance,
       rerollCount: this.rerollCount,
       menus: this.menus.map((m) => ({ name: m.name, weight: m.weight, donors: [...m.donors] })),
     })

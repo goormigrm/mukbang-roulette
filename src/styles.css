@@ -21,6 +21,8 @@
 
 body {
   margin: 0;
+  word-break: keep-all; /* 한글을 단어 중간에서 끊지 않는다 */
+  overflow-wrap: break-word; /* 한 단어가 줄보다 길 때만 쪼갠다 */
   min-height: 100vh;
   min-width: 1100px; /* PC 전용 — 방송 화면(1920×1080) 기준 최적화 */
   color: var(--ink);
@@ -168,6 +170,9 @@ body {
 }
 
 .stamp {
+  /* 그리드/플렉스 항목의 기본 min-width:auto가 max-width를 무시하므로 함께 0으로 */
+  max-width: 88%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -190,8 +195,10 @@ body {
 
 #winner-name {
   font-family: 'Nanum Brush Script', cursive;
-  font-size: clamp(34px, 6vw, 64px);
-  line-height: 1.1;
+  font-size: clamp(30px, 5.5vw, 64px);
+  line-height: 1.15;
+  text-align: center;
+  min-width: 0; /* 긴 메뉴명이 도장 밖으로 나가지 않고 여러 줄로 접히게 */
 }
 
 @keyframes stamp-in {
@@ -243,8 +250,9 @@ body {
 
 /* 상태 바 (리롤 카운트다운 / 안내) */
 .status-bar {
-  width: min(100%, 620px);
+  width: min(100%, 760px);
   min-height: 54px;
+  line-height: 1.45;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -283,7 +291,13 @@ body {
 /* ---------- 버튼 ---------- */
 .controls {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 12px;
+}
+
+.controls button {
+  white-space: nowrap;
 }
 
 button {
@@ -653,6 +667,7 @@ button {
 
 .round-head .win {
   color: var(--red-deep);
+  white-space: nowrap;
 }
 
 .round-menus {
@@ -671,6 +686,7 @@ button {
 /* ---------- 설정 탭 ---------- */
 .settings label {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
@@ -693,7 +709,6 @@ button {
 .hint {
   font-size: 12px;
   color: var(--muted);
-  word-break: break-all;
 }
 
 .shortcut-hint {

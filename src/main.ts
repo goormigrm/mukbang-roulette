@@ -190,11 +190,11 @@ function renderStatus(): void {
     case 'decision': {
       const creditNote =
         store.rerollCredits > 0
-          ? ` <b class="armed-banner">🔄 리롤권 ×${store.rerollCredits} 보유 — 마지막 리롤이 최종!</b>`
+          ? `<div class="armed-banner">🔄 리롤권 ×${store.rerollCredits} 보유 — 마지막 리롤이 최종!</div>`
           : ''
       html = store.windowOpened
-        ? `<div class="big reroll-note">⏱ 접수 마감 — 늦게 도착한 ${cost}원 이상 도네도 확정 전까지 인정됩니다.${creditNote}</div>`
-        : `<div class="big">🎉 당첨! [🔔 리롤 도네 받기] · [🔁 다시 돌리기] · [✅ 결과 확정] 중 선택하세요${creditNote}</div>`
+        ? `<div class="big reroll-note">⏱ 접수 마감 — 늦게 도착한 ${cost}원 이상 도네도 확정 전까지 인정됩니다</div>${creditNote}`
+        : `<div class="big">🎉 당첨! 아래 버튼에서 선택하세요</div>${creditNote}`
       break
     }
     case 'window': {
@@ -347,7 +347,10 @@ btnOpenWindow.addEventListener('click', () => {
   store.startRerollWindow(cost)
 })
 btnReroll.addEventListener('click', () => doSpin(true))
-btnConfirm.addEventListener('click', () => store.confirmResult())
+btnConfirm.addEventListener('click', () => {
+  store.confirmResult()
+  activateTab('history') // 확정 직후 방금 저장된 라운드를 바로 보여준다
+})
 btnPause.addEventListener('click', () => store.togglePaused())
 
 // ---------- 키보드 단축키 (Space 돌리기·정지 / R 리롤 / Enter 확정) ----------

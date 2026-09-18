@@ -14,7 +14,7 @@
 | 스택 | Vite + Vanilla TS + Canvas 2D, socket.io-client **v2.5.0 고정**(치지직 세션이 Socket.IO 2.0.3까지만 지원) |
 | 상세 설계 | [DESIGN.md](DESIGN.md) — 모든 규칙 결정 사항과 변경 이력 포함 |
 
-**연동 검증 상태**: ✅ **실전 검증 완료 (2026-09-18)** — 철면수심 님 계정으로 로그인해 **실제 도네이션이 룰렛에 반영되는 것까지 정상 동작 확인**. 남은 것은 OBS 캡처 리허설과 Client Secret 재발급뿐.
+**연동 검증 상태**: ✅ **실전 검증 완료 (2026-09-18)** — 철면수심 님 계정으로 로그인해 **실제 도네이션이 룰렛에 반영되는 것까지 정상 동작 확인**. **방송 운영 방식: 크롬 창에서 그대로 띄워 쓴다**(별도 캡처 구성 없음 — 이 방식으로 실방송 검증을 마쳤으므로 다시 제안하지 말 것).
 
 ## 2. 확정된 운영 규칙 (전부 구현·테스트 완료)
 
@@ -97,10 +97,9 @@
 
 1. ~~실도네 E2E~~ ✅ **완료 (2026-09-18)** — 철면수심 님 계정에서 실제 도네이션 반영 정상 동작 확인
 2. **익명 후원 실동작 확인** — 방송에서 익명 도네가 들어오면 피드에 어떤 이름으로 찍히는지 확인(치지직 문서 미기술). 이상하면 `chzzk.ts`의 `nick` 폴백만 고치면 됨
-3. **OBS 캡처 리허설** — 창 캡처 시 효과음 경로(창 캡처 오디오 or 데스크톱 오디오) 확인. 우측 관리 패널까지 송출되는지도 함께 점검(문제가 되면 "방송용 화면 모드" 추가 검토)
-4. (권장) Secret이 대화에 노출됐었음 → 개발자센터에서 **재발급** 후 `cd proxy && printf '%s' '<새Secret>' | npx wrangler secret put CHZZK_CLIENT_SECRET` (개행 금지 주의!)
-5. (선택) `proxy/worker.js`의 `ALLOWED_ORIGINS`에 `https://goormigrm.github.io` 넣어 프록시 잠그기 → `npx wrangler deploy`
-6. (미검증 리스크) 치지직 세션 웹소켓의 Origin 정책 — 실도네 테스트에서 함께 검증됨. 문제 시 chzzk.ts의 소켓 연결 부분 확인.
+3. (권장) Secret이 대화에 노출됐었음 → 개발자센터에서 **재발급** 후 `cd proxy && printf '%s' '<새Secret>' | npx wrangler secret put CHZZK_CLIENT_SECRET` (개행 금지 주의!)
+4. (선택) `proxy/worker.js`의 `ALLOWED_ORIGINS`에 `https://goormigrm.github.io` 넣어 프록시 잠그기 → `npx wrangler deploy`
+5. (미검증 리스크) 치지직 세션 웹소켓의 Origin 정책 — 실도네 테스트에서 함께 검증됨. 문제 시 chzzk.ts의 소켓 연결 부분 확인.
 
 ## 6. 개발 환경 메모 (이 PC 기준)
 

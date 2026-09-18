@@ -867,3 +867,43 @@ button {
     opacity: 0;
   }
 }
+
+/* 기록 행이 펼쳐진다는 것을 드러내는 표시 */
+.expand-hint {
+  margin: -4px 0 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--cream-dark);
+  border-left: 3px solid var(--gold);
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b4a12;
+}
+
+.round-head .caret {
+  flex-shrink: 0;
+  color: var(--red-deep);
+  font-size: 12px;
+  transition: transform 0.15s;
+}
+
+.round-head .round-when {
+  flex: 1;
+  text-align: left;
+}
+
+.round-head:hover {
+  background: var(--cream-dark);
+  border-color: var(--red-deep);
+}
+
+.round-head.open {
+  background: var(--cream-dark);
+  border-color: var(--red-deep);
+}
+
+/* 리롤권 구매자 닉네임은 줄이지 않으므로, 많아지면 여러 줄로 */
+.reroll-buyers .rb-names {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}

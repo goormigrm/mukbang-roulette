@@ -140,6 +140,7 @@ function fmtDate(iso: string): string {
 }
 
 function renderHistory(): void {
+  $('#history-hint').hidden = store.history.length === 0
   elHistoryList.innerHTML = ''
   if (store.history.length === 0) {
     const li = document.createElement('li')
@@ -153,12 +154,17 @@ function renderHistory(): void {
     const head = document.createElement('button')
     head.type = 'button'
     head.className = 'round-head'
+    head.title = '누르면 이 판의 후보 메뉴가 펼쳐집니다'
+    const caret = document.createElement('span')
+    caret.className = 'caret'
+    caret.textContent = '▶'
     const left = document.createElement('span')
+    left.className = 'round-when'
     left.textContent = `${fmtDate(r.endedAt)} · ${r.menus.length}종`
     const right = document.createElement('span')
     right.className = 'win'
     right.textContent = `🏆 ${r.winner}${r.rerollCount > 0 ? ` (리롤 ${r.rerollCount}회)` : ''}`
-    head.append(left, right)
+    head.append(caret, left, right)
 
     const menus = document.createElement('ul')
     menus.className = 'round-menus'
@@ -170,6 +176,8 @@ function renderHistory(): void {
     }
     head.addEventListener('click', () => {
       menus.hidden = !menus.hidden
+      head.classList.toggle('open', !menus.hidden)
+      caret.textContent = menus.hidden ? '▶' : '▼'
     })
     li.append(head, menus)
     elHistoryList.appendChild(li)
@@ -246,15 +254,17 @@ function renderRerollBuyers(): void {
     lastBuyerSig = ''
     return
   }
-  // 최근에 산 사람부터 최대 3명 (같은 사람이 여러 번 사면 중복 표시하지 않는다)
-  const recent = [...new Set([...store.rerollUsers].reverse())].slice(0, 3)
-  const sig = `${store.rerollCredits}|${recent.join(',')}`
+  // 산 사람 전원을 최신순으로, 닉네임을 줄이지 않고 표시한다.
+  // 같은 이름이 여러 번이면 "이름 ×2" — 익명 후원자가 여럿일 때 한 명으로 보이지 않게.
+  const counts = new Map<string, number>()
+  for (const u of [...store.rerollUsers].reverse()) counts.set(u, (counts.get(u) ?? 0) + 1)
+  const buyers = [...counts].map(([name, n]) => (n > 1 ? `${name} ×${n}` : name))
+  const sig = `${store.rerollCredits}|${buyers.join(',')}`
   if (sig === lastBuyerSig) return
   lastBuyerSig = sig
-  const more = store.rerollUsers.length > recent.length ? ' 외' : ''
   elRerollBuyers.innerHTML = `
     <span class="rb-count">🔄 리롤권 ×${store.rerollCredits} 획득!</span>
-    <span class="rb-names">${recent.map(escapeHtml).join(' · ')}${more}</span>
+    <span class="rb-names">${buyers.map(escapeHtml).join(' · ')}</span>
     <span class="rb-thanks">님 감사합니다 🙏</span>`
   elRerollBuyers.hidden = false
 }

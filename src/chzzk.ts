@@ -235,17 +235,19 @@ function openSocket(url: string): void {
     const d = parseEvent(raw) as {
       donationType?: string
       donatorNickname?: string
+      donatorChannelId?: string
       payAmount?: string | number
       donationText?: string
     } | null
     if (!d) return
     const amount = Number(d.payAmount) || 0
-    const nick = d.donatorNickname || '익명'
+    const nick = (d.donatorNickname ?? '').trim() || '익명의 후원자'
     const text = d.donationText ?? ''
     const now = Date.now()
     // 치지직 이벤트에는 고유 ID가 없다. 네트워크 중복 전달만 거르도록
     // "같은 사람·금액·메시지가 1초 안에 두 번"인 경우만 중복으로 본다 — 시청자의 진짜 연타는 살린다
-    const key = `${nick}|${amount}|${text}`
+    // 채널 ID가 오면 함께 넣어, 같은 이름(익명 등)의 다른 사람이 중복으로 걸러지지 않게 한다
+    const key = `${d.donatorChannelId ?? nick}|${amount}|${text}`
     const last = recentDonations.get(key)
     if (last !== undefined && now - last < DEDUPE_MS) {
       store.addFeed('skip', `[${nick}] ${amount.toLocaleString('ko-KR')}원 — 1초 내 동일 이벤트 중복 수신, 무시`)

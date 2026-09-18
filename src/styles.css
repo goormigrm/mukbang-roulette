@@ -734,3 +734,136 @@ button {
   color: var(--muted);
   font-size: 13px;
 }
+
+/* ---------- 연결 끊김 경고 띠 ---------- */
+.conn-alert {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 12px 20px;
+  background: var(--red-deep);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 900;
+  border-bottom: 3px solid var(--ink);
+  animation: alert-blink 1s ease-in-out infinite;
+}
+
+.conn-alert .conn-alert-icon {
+  font-size: 24px;
+}
+
+.conn-alert .btn-ghost {
+  background: #fff;
+  border-color: #fff;
+  animation: none;
+}
+
+@keyframes alert-blink {
+  50% {
+    background: #8d0b20;
+  }
+}
+
+/* ---------- 리롤권 구매자 (룰렛 위 큰 표시) ---------- */
+.reroll-buyers {
+  margin-top: 12px;
+  padding: 10px 26px;
+  max-width: 92%;
+  min-width: 0;
+  text-align: center;
+  background: linear-gradient(180deg, #fff3cf, var(--gold));
+  border: 4px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 0 8px 26px rgba(14, 8, 8, 0.35);
+  animation: buyer-pop 0.45s cubic-bezier(0.2, 2, 0.4, 1) both;
+}
+
+.reroll-buyers .rb-count {
+  display: block;
+  font-size: 26px;
+  font-weight: 900;
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.reroll-buyers .rb-names {
+  display: block;
+  margin-top: 2px;
+  font-size: 30px;
+  font-weight: 900;
+  color: var(--red-deep);
+  line-height: 1.25;
+}
+
+.reroll-buyers .rb-thanks {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #6b4a12;
+}
+
+@keyframes buyer-pop {
+  from {
+    transform: scale(0.4) rotate(-6deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+/* ---------- 메뉴 추가 토스트 (룰렛 아래쪽에 크게) ---------- */
+.toast-area {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.toast {
+  max-width: 92%;
+  padding: 8px 22px;
+  background: rgba(255, 253, 249, 0.96);
+  border: 3px solid #1d7a3d;
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 900;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(14, 8, 8, 0.3);
+  animation: toast-in 0.3s cubic-bezier(0.2, 1.8, 0.4, 1) both;
+}
+
+.toast .toast-slots {
+  color: var(--red-deep);
+}
+
+.toast.out {
+  animation: toast-out 0.45s ease-in forwards;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(24px) scale(0.85);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes toast-out {
+  to {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+}

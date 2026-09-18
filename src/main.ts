@@ -1,6 +1,6 @@
 import './styles.css'
 import { store } from './state'
-import type { MenuItem, Round } from './state'
+import type { AppliedDonation, MenuItem, Round } from './state'
 import { RouletteWheel, segColor } from './roulette'
 import * as sound from './sound'
 import * as chzzk from './chzzk'
@@ -41,6 +41,10 @@ const elTotalSlots = $('#total-slots')
 const elOverlay = $('#winner-overlay')
 const elWinnerName = $('#winner-name')
 const elBigTimer = $('#big-timer')
+const elRerollBuyers = $('#reroll-buyers')
+const elToastArea = $('#toast-area')
+const elConnAlert = $('#conn-alert')
+const elConnAlertText = $('#conn-alert-text')
 const btnSpin = $<HTMLButtonElement>('#btn-spin')
 const btnOpenWindow = $<HTMLButtonElement>('#btn-open-window')
 const btnReroll = $<HTMLButtonElement>('#btn-reroll')
@@ -234,6 +238,40 @@ function renderButtons(): void {
   btnConfirm.hidden = !(store.phase === 'decision' || store.phase === 'window')
 }
 
+let lastBuyerSig = ''
+function renderRerollBuyers(): void {
+  const active = (store.phase === 'decision' || store.phase === 'window') && store.rerollCredits > 0
+  if (!active) {
+    elRerollBuyers.hidden = true
+    lastBuyerSig = ''
+    return
+  }
+  // 최근에 산 사람부터 최대 3명 (같은 사람이 여러 번 사면 중복 표시하지 않는다)
+  const recent = [...new Set([...store.rerollUsers].reverse())].slice(0, 3)
+  const sig = `${store.rerollCredits}|${recent.join(',')}`
+  if (sig === lastBuyerSig) return
+  lastBuyerSig = sig
+  const more = store.rerollUsers.length > recent.length ? ' 외' : ''
+  elRerollBuyers.innerHTML = `
+    <span class="rb-count">🔄 리롤권 ×${store.rerollCredits} 획득!</span>
+    <span class="rb-names">${recent.map(escapeHtml).join(' · ')}${more}</span>
+    <span class="rb-thanks">님 감사합니다 🙏</span>`
+  elRerollBuyers.hidden = false
+}
+
+// 메뉴가 추가되는 순간 룰렛 위에 크게 띄우는 토스트
+function showDonationToast(d: AppliedDonation): void {
+  const el = document.createElement('div')
+  el.className = 'toast'
+  el.innerHTML = `🍜 ${escapeHtml(d.nick)}님 → ${escapeHtml(d.name)} <span class="toast-slots">×${d.slots}</span>`
+  elToastArea.appendChild(el)
+  while (elToastArea.children.length > 3) elToastArea.firstElementChild?.remove()
+  setTimeout(() => {
+    el.classList.add('out')
+    setTimeout(() => el.remove(), 500)
+  }, 3500)
+}
+
 function renderOverlay(): void {
   const showLive = (store.phase === 'decision' || store.phase === 'window') && store.winner
   const showConfirmed = store.phase === 'collect' && store.confirmedWinner
@@ -291,6 +329,7 @@ function renderAll(): void {
   renderStatus()
   renderButtons()
   renderOverlay()
+  renderRerollBuyers()
   renderBigTimer()
   if (!wheel.isSpinning) wheel.draw()
 }
@@ -325,6 +364,7 @@ store.on('winner', () => {
 store.on('armed', () => {
   if (store.settings.sound) sound.rerollChime()
 })
+store.on('donation', (d) => showDonationToast(d as AppliedDonation))
 store.on('confirmed', () => {
   if (store.settings.sound) sound.finale()
 })
@@ -517,12 +557,36 @@ function updateAuthButtons(): void {
   btnChzzkLogin.hidden = loggedIn
   btnChzzkLogout.hidden = !loggedIn
 }
+let alertShowing = false
+let lastAlarmAt = 0
+
+function showConnAlert(detail?: string): void {
+  elConnAlertText.textContent = detail
+    ? `치지직 연결 문제 — 도네이션이 반영되지 않습니다 (${detail})`
+    : '치지직 연결이 끊겼습니다 — 도네이션이 반영되지 않습니다'
+  elConnAlert.hidden = false
+  // 경보음은 20초에 한 번까지만 (재연결 시도마다 울려 시끄러워지는 것 방지)
+  const now = Date.now()
+  if (store.settings.sound && now - lastAlarmAt > 20_000) {
+    lastAlarmAt = now
+    sound.connectionLost()
+  }
+  alertShowing = true
+}
+
+function hideConnAlert(playChime: boolean): void {
+  elConnAlert.hidden = true
+  if (alertShowing && playChime && store.settings.sound) sound.connectionRestored()
+  alertShowing = false
+}
+
 chzzk.onStatus((s, detail) => {
   connBadge.classList.remove('badge-off', 'badge-on', 'badge-err')
   switch (s) {
     case 'on':
       connBadge.classList.add('badge-on')
       connBadge.textContent = '🟢 치지직 수신 중'
+      hideConnAlert(true)
       break
     case 'connecting':
       connBadge.classList.add('badge-off')
@@ -532,14 +596,21 @@ chzzk.onStatus((s, detail) => {
       connBadge.classList.add('badge-err')
       connBadge.textContent = '⚠ 연결 오류'
       if (detail) store.addFeed('info', `⚠ 치지직: ${detail}`)
+      showConnAlert(detail)
       store.emitChange()
       break
     default:
       connBadge.classList.add('badge-off')
       connBadge.textContent = '치지직 미연결'
+      hideConnAlert(false) // 수동 로그아웃 — 경보 없이 닫는다
   }
   connBadge.title = detail ?? ''
   updateAuthButtons()
+})
+
+$('#btn-conn-retry').addEventListener('click', () => {
+  if (chzzk.hasToken()) void chzzk.connect()
+  else chzzk.startLogin()
 })
 
 btnChzzkLogin.addEventListener('click', () => {

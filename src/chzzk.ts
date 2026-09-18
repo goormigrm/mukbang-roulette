@@ -181,6 +181,12 @@ function handleFailure(e: unknown): void {
 
 /** 세션 연결 + 후원 이벤트 구독 */
 export async function connect(): Promise<void> {
+  if (!hasToken()) {
+    // 토큰이 없는데 재연결을 돌리면 끝없이 실패하므로 여기서 멈추고 로그인을 요구한다
+    manualOff = true
+    statusCb('error', '로그인이 필요합니다 — [치지직 로그인]을 눌러주세요')
+    return
+  }
   const gen = ++connectGen
   manualOff = false
   if (reconnectTimer !== null) {
@@ -301,7 +307,7 @@ function scheduleReconnect(): void {
     reconnectTimer = null
     if (!manualOff) void connect()
   }, reconnectDelay)
-  reconnectDelay = Math.min(reconnectDelay * 2, 60000)
+  reconnectDelay = Math.min(reconnectDelay * 2, 15000) // 방송 중이므로 최대 대기를 15초로 짧게
 }
 
 function disconnectSocket(): void {

@@ -27,6 +27,12 @@
       </div>
     </header>
 
+    <div id="conn-alert" class="conn-alert" hidden>
+      <span class="conn-alert-icon">⚠</span>
+      <span id="conn-alert-text">치지직 연결이 끊겼습니다 — 도네이션이 반영되지 않습니다</span>
+      <button type="button" id="btn-conn-retry" class="btn-ghost small">다시 연결</button>
+    </div>
+
     <main class="layout">
       <section class="wheel-area frame">
         <div class="wheel-wrap">
@@ -37,7 +43,9 @@
               <span id="winner-name"></span>
             </div>
             <div id="big-timer" class="big-timer" hidden></div>
+            <div id="reroll-buyers" class="reroll-buyers" hidden></div>
           </div>
+          <div id="toast-area" class="toast-area"></div>
         </div>
         <div id="status-bar" class="status-bar"></div>
         <div class="controls">

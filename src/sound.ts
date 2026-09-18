@@ -203,3 +203,18 @@ export function rerollChime(): void {
   beep(1174.7, 0.35, 'triangle', 0.13, 0.34)
   burst(0.34, 0.25, 0.07, 5000)
 }
+
+/** 연결 끊김 경보 — 주의를 끄는 2음 사이렌 3회 */
+export function connectionLost(): void {
+  for (let i = 0; i < 3; i++) {
+    const t = i * 0.3
+    beep(880, 0.14, 'square', 0.16, t)
+    beep(660, 0.16, 'square', 0.16, t + 0.15)
+  }
+}
+
+/** 연결 복구 — 짧은 상승 2음 */
+export function connectionRestored(): void {
+  beep(660, 0.12, 'triangle', 0.13)
+  beep(990, 0.22, 'triangle', 0.14, 0.12)
+}

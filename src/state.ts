@@ -38,6 +38,14 @@ export interface FeedEntry {
   text: string
 }
 
+/** 메뉴로 반영된 도네 — 화면 토스트용 */
+export interface AppliedDonation {
+  nick: string
+  amount: number
+  name: string
+  slots: number
+}
+
 export interface DonationInput {
   id: string // 디듀프용
   nick: string
@@ -385,7 +393,7 @@ export class Store {
       this.menus.push({ id: this.nextMenuId++, name, weight: slots, donors: [d.nick] })
     }
     this.addFeed('add', `🍜 [${d.nick}] ${d.amount.toLocaleString('ko-KR')}원 → "${name}" ×${slots}`)
-    this.emit('donation', d)
+    this.emit('donation', { nick: d.nick, amount: d.amount, name, slots } satisfies AppliedDonation)
   }
 
   // ---- 스핀 / 리롤 상태 머신 ----

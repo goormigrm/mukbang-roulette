@@ -20,6 +20,7 @@ const wheel = new RouletteWheel(
 function doSpin(useCredit = false): void {
   if (!store.beginSpin(useCredit)) return
   wheel.startFreeSpin()
+  if (store.settings.sound) sound.startBgm()
 }
 
 function doStop(): void {
@@ -27,6 +28,7 @@ function doStop(): void {
   const r = store.pickWinner()
   if (!r) return
   wheel.requestStop(r.index, () => store.finishSpin())
+  sound.duckBgm(0.55) // 드럼롤과 딸깍이 앞으로 나오도록 배경음은 한 발 물러난다
   if (store.settings.sound) sound.startDrumroll()
   renderStatus()
   renderButtons()
@@ -320,6 +322,7 @@ store.on('tick', (remainMs) => {
 })
 store.on('winner', () => {
   sound.stopDrumroll()
+  sound.stopBgm()
   if (store.settings.sound) sound.fanfare()
 })
 store.on('armed', () => {

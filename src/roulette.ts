@@ -4,7 +4,7 @@
 //   · 포인터 위에 "지금 가리키는 항목 이름"을 크게 실시간 표시 (돌아가는 동안 휙휙 바뀜)
 //   · 원판 라벨은 이름만 — 흰 글씨 + 어두운 테두리 (칸 수는 옆 목록에서 확인)
 // 동작: [돌리기] → 정지 버튼을 누를 때까지 계속 회전, [정지] 순간 당첨 확정 후
-//       현재 속도에서 이어지는 감속 곡선으로 8~11초간 긴장감 있게 착지.
+//       현재 속도에서 이어지는 감속 곡선으로 10~13초간 긴장감 있게 착지.
 
 import type { MenuItem } from './state'
 
@@ -37,9 +37,10 @@ function easeOutCubic(t: number): number {
 
 type SpinMode = 'idle' | 'free' | 'stopping'
 
-const MAX_SPEED = TAU * 2.2 // 자유 회전 속도 (rad/s)
+const MAX_SPEED = TAU * 2.7 // 자유 회전 속도 (rad/s)
 const ACCEL_MS = 800 // 최고 속도 도달 시간
-// 딸깍 소리용 가상 핀 개수 — 실제 돌림판처럼 메뉴 개수와 무관하게 일정한 리듬으로 딸깍인다
+// 딸깍 소리용 가상 핀 개수 — 메뉴가 이보다 적으면 실제 돌림판처럼 일정한 리듬으로 딸깍이고,
+// 더 많으면 칸 하나하나가 핀이 되어 빽빽할수록 따다다닥이 촘촘해진다 (라벨 전환과 딸깍이 일치)
 const PEGS = 24
 
 export class RouletteWheel {
@@ -87,6 +88,11 @@ export class RouletteWheel {
   private pegIndex(): number {
     const a = ((this.rotation % TAU) + TAU) % TAU
     return Math.floor(a / (TAU / PEGS))
+  }
+
+  /** 딸깍 트리거 키 — 메뉴 24개 이하면 가상 핀 24개, 그보다 많으면 칸 경계마다 */
+  private tickKey(): number {
+    return this.getItems().length > PEGS ? this.indexAtPointer() : this.pegIndex()
   }
 
   private fitCanvas(): void {
@@ -238,7 +244,7 @@ export class RouletteWheel {
 
   /**
    * [정지] — winnerIndex 칸에 멈추도록 감속을 시작한다.
-   * 현재 회전 속도에서 이어지는 감속 곡선을 계산해 8~11초간 긴장감 있게 멈춘다.
+   * 현재 회전 속도에서 이어지는 감속 곡선을 계산해 10~13초간 긴장감 있게 멈춘다.
    */
   requestStop(winnerIndex: number, onDone: () => void): void {
     if (this.mode !== 'free') return
@@ -247,7 +253,7 @@ export class RouletteWheel {
 
     const now = performance.now()
     const v = this.freeVelocity(now)
-    const duration = 8000 + Math.random() * 3000 // 8~11초 감속 — 정지 후에도 충분히 오래 돌며 긴장감 유지
+    const duration = 10000 + Math.random() * 3000 // 10~13초 감속 — 정지 후에도 충분히 오래 돌며 긴장감 유지
     // easeOutCubic의 t=0 기울기(3·range/duration)가 현재 속도 v와 같아지는 회전량
     const idealRange = (v * duration) / 1000 / 3
 
@@ -290,7 +296,7 @@ export class RouletteWheel {
   private step(now: number): void {
     const dt = Math.min(0.3, (now - this.lastFrameAt) / 1000)
     this.lastFrameAt = now
-    const prevPeg = this.pegIndex()
+    const prevPeg = this.tickKey()
 
     if (this.mode === 'free') {
       this.rotation += this.freeVelocity(now) * dt
@@ -312,7 +318,7 @@ export class RouletteWheel {
     }
 
     this.draw()
-    if (this.pegIndex() !== prevPeg && now - this.lastTickAt > 35) {
+    if (this.tickKey() !== prevPeg && now - this.lastTickAt > 35) {
       this.lastTickAt = now
       const progress =
         this.mode === 'stopping' ? Math.min(1, (now - this.stopStartAt) / this.stopDuration) : 0

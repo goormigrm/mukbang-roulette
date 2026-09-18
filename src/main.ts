@@ -354,8 +354,52 @@ function renderOverlay(): void {
   elOverlay.hidden = elWinnerStamp.hidden && elBigTimer.hidden && elRerollBuyers.hidden
 }
 
-// 당첨 순간 컨페티 — 화면 전체에 색종이가 쏟아진다 (클립용 연출)
-function confetti(count = 140): void {
+// 팡! 하고 터지는 폭죽 — 한 지점에서 사방으로 터져 나간 뒤 아래로 떨어진다
+function firework(x: number, y: number, count = 46): void {
+  const flash = document.createElement('i')
+  flash.className = 'burst-flash'
+  flash.style.left = `${x}px`
+  flash.style.top = `${y}px`
+  elConfetti.appendChild(flash)
+  setTimeout(() => flash.remove(), 600)
+
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement('i')
+    p.className = i % 3 === 0 ? 'burst-piece strip' : 'burst-piece'
+    const angle = (i / count) * Math.PI * 2 + Math.random() * 0.25
+    const dist = 130 + Math.random() * 280
+    p.style.left = `${x}px`
+    p.style.top = `${y}px`
+    p.style.background = segColor(i + Math.floor(Math.random() * 3))
+    p.style.setProperty('--dx', `${Math.cos(angle) * dist}px`)
+    // 아래로 더 멀리 — 터진 뒤 중력에 끌려 떨어지는 느낌
+    p.style.setProperty('--dy', `${Math.sin(angle) * dist + 130 + Math.random() * 120}px`)
+    p.style.setProperty('--r', `${Math.random() * 720 - 360}deg`)
+    p.style.animationDuration = `${0.9 + Math.random() * 0.7}s`
+    elConfetti.appendChild(p)
+    setTimeout(() => p.remove(), 1900)
+  }
+}
+
+/** 당첨 축포 — 룰렛 위에서 세 번 연달아 터지고, 이어서 색종이가 쏟아진다 */
+function celebrate(): void {
+  const r = $('#wheel').getBoundingClientRect()
+  const cx = r.left + r.width / 2
+  const cy = r.top + r.height / 2
+  const shots: [number, number, number][] = [
+    [0, cx, cy],
+    [170, cx - r.width * 0.3, cy - r.height * 0.18],
+    [340, cx + r.width * 0.28, cy - r.height * 0.12],
+  ]
+  for (const [delay, x, y] of shots) {
+    setTimeout(() => firework(x, y), delay)
+    if (store.settings.sound) sound.pop(delay / 1000)
+  }
+  confetti()
+}
+
+// 당첨 순간 색종이 — 화면 전체에 쏟아진다 (클립용 연출)
+function confetti(count = 220): void {
   for (let i = 0; i < count; i++) {
     const p = document.createElement('i')
     p.className = i % 4 === 0 ? 'confetti-piece round' : 'confetti-piece'
@@ -449,7 +493,7 @@ store.on('tick', (remainMs) => {
 })
 store.on('winner', () => {
   sound.stopDrumroll()
-  confetti()
+  celebrate()
   if (store.settings.sound) sound.fanfare()
 })
 store.on('armed', () => {

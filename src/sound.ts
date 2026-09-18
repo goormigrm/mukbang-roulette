@@ -218,3 +218,10 @@ export function connectionRestored(): void {
   beep(660, 0.12, 'triangle', 0.13)
   beep(990, 0.22, 'triangle', 0.14, 0.12)
 }
+
+/** 폭죽 "펑" — 짧고 강한 파열음 + 저음 충격 */
+export function pop(when = 0): void {
+  burst(when, 0.09, 0.22, 1200) // 파열
+  burst(when, 0.35, 0.1, 5600) // 흩어지는 잔향
+  beep(90, 0.14, 'sine', 0.2, when) // 저음 충격
+}

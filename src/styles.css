@@ -986,3 +986,56 @@ button {
   color: var(--red-deep);
   letter-spacing: 0.5px;
 }
+
+/* 팡! 터지는 폭죽 — 중심에서 사방으로 흩어진 뒤 아래로 떨어진다 */
+.burst-piece {
+  position: fixed;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.55);
+  animation: burst-fly cubic-bezier(0.12, 0.72, 0.3, 1) forwards;
+}
+
+.burst-piece.strip {
+  border-radius: 2px;
+  width: 9px;
+  height: 18px;
+}
+
+@keyframes burst-fly {
+  from {
+    transform: translate(-50%, -50%) scale(0.5) rotate(0);
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.05)
+      rotate(var(--r, 360deg));
+    opacity: 0;
+  }
+}
+
+/* 터지는 순간의 섬광 */
+.burst-flash {
+  position: fixed;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, rgba(255, 240, 190, 0.85) 45%, rgba(255, 200, 80, 0) 70%);
+  animation: burst-flash 0.5s ease-out forwards;
+}
+
+@keyframes burst-flash {
+  from {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  to {
+    transform: scale(14);
+    opacity: 0;
+  }
+}

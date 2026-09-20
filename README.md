@@ -22,9 +22,10 @@
 리롤 비용·제한시간·모집 마감 시간·칸당 금액 등은 ⚙ 설정에서 자유롭게 변경할 수 있다.
 운영 편의: 도네 반영 일시정지 토글(⏸ — 정지 중엔 리롤 적립도 안 됨), 리롤 도네 없이 [🔁 다시 돌리기],
 칸 조절 클릭 ±1 / Ctrl+클릭 ±10 / Alt+클릭 ±100, 메뉴 JSON 내보내기·불러오기, 테스트 도네이션.
-예시 메뉴 파일 두 가지 — [`public/sample-menus.json`](public/sample-menus.json) (50종, 추천자 없음) ·
-[`public/sample-donations.json`](public/sample-donations.json) (38종, **시청자 도네로 만들어진 상황 재현** — 메뉴마다 추천자 닉네임 포함). 배포본에서는
-`https://goormigrm.github.io/mukbang-roulette/sample-donations.json` 로 받아 [메뉴 불러오기]에 넣으면 된다.
+예시 메뉴 파일 세 가지 — [`public/sample-menus.json`](public/sample-menus.json) (50종, 추천자 없음) ·
+[`public/sample-donations.json`](public/sample-donations.json) (38종, **시청자 도네로 만들어진 상황 재현** — 메뉴마다 추천자 닉네임 포함) ·
+[`public/sample-menus-120.json`](public/sample-menus-120.json) (**120종 671칸**, 도네 도착 순서처럼 섞인 성능·연출 테스트용).
+배포본에서는 `https://goormigrm.github.io/mukbang-roulette/sample-menus-120.json` 처럼 받아 [메뉴 불러오기]에 넣으면 된다.
 단축키: **Space** 돌리기·정지·다시 돌리기 / **R** 리롤 / **Enter** 결과 확정(누르면 기록 탭으로 자동 전환).
 룰렛 오른쪽 위를 누르면 **이번 판의 이름**(메인 메뉴 / 사이드 / 디저트 등)을 적을 수 있고, 기록에도 함께 남는다.
 메뉴 개수에 제한은 없다(300종까지 60fps 확인). 새 버전이 배포되면 열어둔 화면도 모집 중일 때 자동으로 새로고침된다.

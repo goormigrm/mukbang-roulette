@@ -4,22 +4,18 @@ import type { AppliedDonation, MenuItem, Round } from './state'
 import { MIN_SPIN_MS, RouletteWheel, segColor } from './roulette'
 import * as sound from './sound'
 import * as chzzk from './chzzk'
+import { watchForUpdates } from './update'
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string): T => document.querySelector(sel) as T
 
 // ---------- 룰렛 ----------
-const wheel = new RouletteWheel(
-  $<HTMLCanvasElement>('#wheel'),
-  () => store.menus,
-  // 핀을 하나 지날 때마다 딸깍
-  (progress) => {
-    if (store.settings.sound) sound.tick(progress)
-  },
-)
+const wheel = new RouletteWheel($<HTMLCanvasElement>('#wheel'), () => store.menus)
 
 function doSpin(useCredit = false): void {
   if (!store.beginSpin(useCredit)) return
   wheel.startFreeSpin()
+  // 딸깍 소리는 화면 프레임이 아니라 오디오 시계로 돈다 (메뉴가 많아도 끊기지 않게)
+  if (store.settings.sound) sound.startTicking(() => wheel.tickRate, () => wheel.stopProgress)
   // 최소 회전 시간이 지나면 [정지!]를 켜준다 (그 사이엔 스토어 변경이 없어 자동 리렌더가 안 되므로)
   setTimeout(renderButtons, MIN_SPIN_MS + 30)
 }
@@ -57,6 +53,14 @@ const elWinnerStamp = $('#winner-stamp')
 const elWinnerDonors = $('#winner-donors')
 const elWinnerChance = $('#winner-chance')
 const elConfetti = $('#confetti')
+const elRoundTitle = $<HTMLInputElement>('#round-title')
+
+function renderRoundTitle(): void {
+  // 입력 중에는 건드리지 않는다 (커서가 튀지 않게)
+  if (document.activeElement !== elRoundTitle && elRoundTitle.value !== store.title) {
+    elRoundTitle.value = store.title
+  }
+}
 
 function renderPause(): void {
   btnPause.textContent = store.paused ? '⏸ 도네 반영 정지됨' : '▶ 도네 반영 중'
@@ -165,6 +169,12 @@ function renderHistory(): void {
     const caret = document.createElement('span')
     caret.className = 'caret'
     caret.textContent = '▶'
+    if (r.title) {
+      const tag = document.createElement('span')
+      tag.className = 'round-title-tag'
+      tag.textContent = r.title
+      head.appendChild(tag)
+    }
     const left = document.createElement('span')
     left.className = 'round-when'
     left.textContent = `${fmtDate(r.endedAt)} · ${r.menus.length}종`
@@ -456,6 +466,7 @@ function renderBigTimer(): void {
 }
 
 function renderAll(): void {
+  renderRoundTitle()
   renderPause()
   renderMenus()
   renderFeed()
@@ -492,6 +503,7 @@ store.on('tick', (remainMs) => {
   }
 })
 store.on('winner', () => {
+  sound.stopTicking()
   sound.stopDrumroll()
   celebrate()
   if (store.settings.sound) sound.fanfare()
@@ -528,6 +540,11 @@ btnConfirm.addEventListener('click', () => {
   activateTab('history') // 확정 직후 방금 저장된 라운드를 바로 보여준다
 })
 btnPause.addEventListener('click', () => store.togglePaused())
+elRoundTitle.addEventListener('change', () => store.setTitle(elRoundTitle.value))
+elRoundTitle.addEventListener('blur', () => store.setTitle(elRoundTitle.value))
+elRoundTitle.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') elRoundTitle.blur()
+})
 
 // ---------- 키보드 단축키 (Space 돌리기·정지 / R 리롤 / Enter 확정) ----------
 function isTypingTarget(t: EventTarget | null): boolean {
@@ -760,6 +777,38 @@ btnChzzkLogout.addEventListener('click', () => {
   chzzk.logout()
   updateAuthButtons()
 })
+
+// ---------- 새 버전 자동 반영 ----------
+// 새 버전이 올라오면 이미 열어둔 화면도 따라가게 한다.
+// 다만 판이 돌아가는 중에 새로고침하면 흐름이 끊기므로, 모집 중일 때만 실제로 새로고침한다.
+const elUpdateBanner = $('#update-banner')
+const elUpdateWhen = $('#update-when')
+let updateReady = false
+
+function reloadForUpdate(): void {
+  // 진행 중 상태는 localStorage에 저장돼 있어 새로고침해도 이어진다
+  location.reload()
+}
+
+function maybeReload(): void {
+  if (!updateReady) return
+  if (store.phase === 'collect') {
+    elUpdateWhen.textContent = '— 잠시 후 자동으로 적용합니다'
+    setTimeout(reloadForUpdate, 3000)
+  } else {
+    elUpdateWhen.textContent = '— 이번 판이 끝나면 자동으로 적용합니다'
+  }
+}
+
+watchForUpdates(() => {
+  updateReady = true
+  elUpdateBanner.hidden = false
+  store.addFeed('info', '🔄 새 버전이 배포되어 곧 자동으로 적용됩니다')
+  store.emitChange()
+  maybeReload()
+})
+$('#btn-update-now').addEventListener('click', reloadForUpdate)
+store.on('change', maybeReload) // 판이 끝나 모집 중으로 돌아오면 그때 적용
 
 // ---------- 시작 ----------
 renderAll()

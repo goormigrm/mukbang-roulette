@@ -12,6 +12,8 @@ export interface MenuItem {
 export interface Round {
   id: number
   endedAt: string // ISO
+  /** 그 판의 이름 (예: 메인 메뉴 / 사이드 / 디저트) */
+  title?: string
   winner: string
   /** 당첨 당시 그 메뉴의 확률(%) — 확률대로 뽑혔음을 나중에도 확인할 수 있게 남긴다 */
   chance?: number
@@ -82,6 +84,7 @@ export const MAX_HISTORY = 20
 /** 새로고침해도 이어지도록 저장하는 진행 중 라운드 상태 */
 interface RoundState {
   phase: Phase
+  title?: string
   winner: MenuItem | null
   confirmedWinner: string | null
   rerollCredits: number
@@ -105,6 +108,8 @@ export class Store {
   history: Round[] = []
   phase: Phase = 'collect'
   paused = false // 도네이션 반영 일시정지
+  /** 이번 판의 이름 — 룰렛 오른쪽 위에 표시되고 기록에도 남는다. 바꾸기 전까지 유지된다 */
+  title = ''
   winner: MenuItem | null = null
   confirmedWinner: string | null = null
   /** 확정된 당첨 메뉴를 추천한 사람들 (화면 표시용) */
@@ -197,6 +202,7 @@ export class Store {
 
   /** 새로고침 전에 진행 중이던 라운드(당첨·리롤권·접수 상태)를 이어받는다 */
   private restoreRound(r: RoundState): void {
+    this.title = typeof r.title === 'string' ? r.title : ''
     this.confirmedDonors = Array.isArray(r.confirmedDonors) ? r.confirmedDonors.map(String) : []
     this.confirmedChance = Number(r.confirmedChance) || 0
     this.winnerChance = Number(r.winnerChance) || 0
@@ -237,6 +243,7 @@ export class Store {
       rerollCount: this.rerollCount,
       currentRerollCost: this.currentRerollCost,
       windowOpened: this.windowOpened,
+      title: this.title,
       confirmedDonors: this.confirmedDonors,
       confirmedChance: this.confirmedChance,
       winnerChance: this.winnerChance,
@@ -275,6 +282,14 @@ export class Store {
   // ---- 설정 ----
   updateSettings(patch: Partial<Settings>): void {
     this.settings = { ...this.settings, ...patch }
+    this.changed()
+  }
+
+  /** 이번 판의 이름 설정 (예: 메인 메뉴 / 사이드 / 디저트) */
+  setTitle(title: string): void {
+    const next = title.trim().slice(0, 30)
+    if (next === this.title) return
+    this.title = next
     this.changed()
   }
 
@@ -587,6 +602,7 @@ export class Store {
     this.history.unshift({
       id: this.nextRoundId++,
       endedAt: new Date().toISOString(),
+      title: this.title,
       winner: winnerName,
       chance: this.winnerChance,
       rerollCount: this.rerollCount,

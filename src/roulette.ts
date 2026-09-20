@@ -4,7 +4,7 @@
 //   · 포인터 위에 "지금 가리키는 항목 이름"을 크게 실시간 표시 (돌아가는 동안 휙휙 바뀜)
 //   · 원판 라벨은 이름만 — 흰 글씨 + 어두운 테두리 (칸 수는 옆 목록에서 확인)
 // 동작: [돌리기] → 정지 버튼을 누를 때까지 계속 회전, [정지] 순간 당첨 확정 후
-//       현재 속도에서 이어지는 감속 곡선으로 10~13초간 긴장감 있게 착지.
+//       현재 속도에서 이어지는 감속 곡선으로 7~9초간 긴장감 있게 착지.
 
 import type { MenuItem } from './state'
 
@@ -37,7 +37,7 @@ function easeOutCubic(t: number): number {
 
 type SpinMode = 'idle' | 'free' | 'stopping'
 
-const MAX_SPEED = TAU * 2.7 // 자유 회전 속도 (rad/s)
+const MAX_SPEED = TAU * 3.6 // 자유 회전 속도 (rad/s)
 const ACCEL_MS = 800 // 최고 속도 도달 시간
 /** [돌리기] 직후 이 시간 동안은 정지할 수 없다 — 거의 돌지 않고 끝나 보이는 것을 막는다 */
 export const MIN_SPIN_MS = 1000
@@ -54,7 +54,17 @@ export class RouletteWheel {
 
   // free 회전 상태
   private freeStartAt = 0
-  private lastTickAt = 0
+
+  // 칸 각도 캐시 — 메뉴가 바뀔 때만 다시 계산한다
+  private segs: { start: number; end: number }[] = []
+  private geomItems: MenuItem[] | null = null
+  private geomKey = ''
+  private geomVersion = 0
+  // 원판 그림(칸·라벨·테두리)을 미리 그려 두는 오프스크린 캔버스.
+  // 메뉴 110종이면 매 프레임 라벨 110개를 다시 그리느라 7fps까지 떨어졌다 —
+  // 회전과 무관한 그림이므로 한 번만 그려 두고 프레임마다 돌려서 한 장 붙인다.
+  private plate: HTMLCanvasElement | null = null
+  private plateKey = ''
 
   // stopping 상태
   private stopStartRot = 0
@@ -66,8 +76,6 @@ export class RouletteWheel {
   constructor(
     private canvas: HTMLCanvasElement,
     private getItems: () => MenuItem[],
-    /** 가상 핀 하나를 지날 때마다 호출. progress: 감속 진행도 0~1 (자유 회전 중엔 0) */
-    private onPegCross?: (progress: number) => void,
   ) {
     const resize = () => this.fitCanvas()
     window.addEventListener('resize', resize)
@@ -86,20 +94,34 @@ export class RouletteWheel {
     return this.mode === 'stopping'
   }
 
+  /** 현재 각속도 (rad/s) — 소리 빈도를 속도에 맞추는 데 쓴다 */
+  get angularSpeed(): number {
+    const now = performance.now()
+    if (this.mode === 'free') return this.freeVelocity(now)
+    if (this.mode === 'stopping') {
+      // easeOutCubic의 순간 기울기: 3·(1-t)²·회전량 / 지속시간
+      const t = Math.min(1, (now - this.stopStartAt) / this.stopDuration)
+      return (3 * (1 - t) ** 2 * (this.stopEndRot - this.stopStartRot)) / (this.stopDuration / 1000)
+    }
+    return 0
+  }
+
+  /** 초당 몇 번 딸깍여야 하는지 (핀/칸을 지나는 속도) */
+  get tickRate(): number {
+    const units = this.getItems().length > PEGS ? Math.max(1, this.segs.length) : PEGS
+    return (this.angularSpeed / TAU) * units
+  }
+
+  /** 감속 진행도 0~1 (자유 회전 중엔 0) — 멈추기 직전일수록 소리가 높아진다 */
+  get stopProgress(): number {
+    return this.mode === 'stopping'
+      ? Math.min(1, (performance.now() - this.stopStartAt) / this.stopDuration)
+      : 0
+  }
+
   /** 최소 회전 시간을 채워 이제 정지할 수 있는지 */
   get canStop(): boolean {
     return this.mode === 'free' && performance.now() - this.freeStartAt >= MIN_SPIN_MS
-  }
-
-  /** 현재 회전각이 몇 번째 가상 핀 구간에 있는지 (딸깍 트리거용) */
-  private pegIndex(): number {
-    const a = ((this.rotation % TAU) + TAU) % TAU
-    return Math.floor(a / (TAU / PEGS))
-  }
-
-  /** 딸깍 트리거 키 — 메뉴 24개 이하면 가상 핀 24개, 그보다 많으면 칸 경계마다 */
-  private tickKey(): number {
-    return this.getItems().length > PEGS ? this.indexAtPointer() : this.pegIndex()
   }
 
   private fitCanvas(): void {
@@ -110,10 +132,16 @@ export class RouletteWheel {
     this.draw()
   }
 
-  /** 각 칸의 [시작, 끝) 각도(회전 미적용) */
-  private segmentAngles(): { start: number; end: number }[] {
+  /** 각 칸의 [시작, 끝) 각도(회전 미적용). 메뉴가 그대로면 이전 계산을 재사용한다 */
+  private syncSegs(): { start: number; end: number }[] {
     const items = this.getItems()
     const total = items.reduce((a, m) => a + m.weight, 0)
+    const key = `${items.length}|${total}`
+    // 배열 자체가 교체됐거나(삭제·불러오기) 개수·총 칸이 달라졌으면 다시 계산
+    if (this.geomItems === items && this.geomKey === key) return this.segs
+    this.geomItems = items
+    this.geomKey = key
+    this.geomVersion++
     const out: { start: number; end: number }[] = []
     let acc = 0
     for (const m of items) {
@@ -121,7 +149,71 @@ export class RouletteWheel {
       acc += m.weight
       out.push({ start, end: (acc / total) * TAU })
     }
+    this.segs = out
     return out
+  }
+
+  /** 회전과 무관한 원판 그림을 오프스크린에 준비한다 (메뉴·크기가 바뀔 때만 다시 그림) */
+  private ensurePlate(size: number, dpr: number, cx: number, cy: number, R: number): HTMLCanvasElement | null {
+    const items = this.getItems()
+    if (items.length === 0) return null
+    const key = `${size}|${dpr}|${this.geomVersion}`
+    if (this.plate && this.plateKey === key) return this.plate
+
+    const cv = this.plate ?? document.createElement('canvas')
+    cv.width = size * dpr
+    cv.height = size * dpr
+    const c = cv.getContext('2d')
+    if (!c) return null
+    c.setTransform(1, 0, 0, 1, 0, 0)
+    c.clearRect(0, 0, cv.width, cv.height)
+    c.scale(dpr, dpr)
+
+    const segs = this.segs
+    for (let i = 0; i < items.length; i++) {
+      const { start, end } = segs[i]
+      let color = segColor(i)
+      // 마지막 칸이 첫 칸과 같은 색으로 맞닿는 경우 보정
+      if (i === items.length - 1 && items.length > 1 && color === segColor(0)) {
+        color = PALETTE[(i + 5) % PALETTE.length]
+      }
+      c.beginPath()
+      c.moveTo(cx, cy)
+      c.arc(cx, cy, R, start, end)
+      c.closePath()
+      c.fillStyle = color
+      c.fill()
+    }
+
+    // 원판 외곽선 (확장처럼 얇은 진회색 한 겹)
+    c.beginPath()
+    c.arc(cx, cy, R, 0, TAU)
+    c.strokeStyle = '#37474F'
+    c.lineWidth = 3
+    c.stroke()
+
+    // 라벨 — 이름만, 흰 글씨 + 어두운 테두리 (확장 스타일)
+    const fontSize = Math.max(12, Math.min(size * 0.042, (size * 2.4) / Math.max(8, items.length)))
+    c.font = `800 ${fontSize}px "Noto Sans KR", sans-serif`
+    c.textBaseline = 'middle'
+    for (let i = 0; i < items.length; i++) {
+      const { start, end } = segs[i]
+      c.save()
+      c.translate(cx, cy)
+      c.rotate((start + end) / 2)
+      c.textAlign = 'right'
+      c.lineJoin = 'round'
+      c.lineWidth = Math.max(2.5, fontSize * 0.18)
+      c.strokeStyle = 'rgba(45, 45, 45, 0.8)'
+      c.strokeText(items[i].name, R * 0.94, 0, R * 0.6)
+      c.fillStyle = '#FFFFFF'
+      c.fillText(items[i].name, R * 0.94, 0, R * 0.6)
+      c.restore()
+    }
+
+    this.plate = cv
+    this.plateKey = key
+    return cv
   }
 
   draw(): void {
@@ -157,20 +249,17 @@ export class RouletteWheel {
       return
     }
 
-    const segs = this.segmentAngles()
-    for (let i = 0; i < items.length; i++) {
-      const { start, end } = segs[i]
-      let color = segColor(i)
-      // 마지막 칸이 첫 칸과 같은 색으로 맞닿는 경우 보정
-      if (i === items.length - 1 && items.length > 1 && color === segColor(0)) {
-        color = PALETTE[(i + 5) % PALETTE.length]
-      }
-      ctx.beginPath()
-      ctx.moveTo(cx, cy)
-      ctx.arc(cx, cy, R, start + this.rotation, end + this.rotation)
-      ctx.closePath()
-      ctx.fillStyle = color
-      ctx.fill()
+    const segs = this.syncSegs()
+
+    // 회전하는 부분(칸·라벨·테두리)은 미리 그려 둔 그림을 돌려서 한 번에 붙인다
+    const plate = this.ensurePlate(size, dpr, cx, cy, R)
+    if (plate) {
+      ctx.save()
+      ctx.translate(cx, cy)
+      ctx.rotate(this.rotation)
+      ctx.translate(-cx, -cy)
+      ctx.drawImage(plate, 0, 0, size, size)
+      ctx.restore()
     }
 
     // 감속 절반을 지나면 포인터 아래 칸을 번쩍여 "여기 걸릴까?" 긴장을 만든다.
@@ -191,33 +280,6 @@ export class RouletteWheel {
         ctx.lineWidth = 3 + 3 * k
         ctx.stroke()
       }
-    }
-
-    // 원판 외곽선 (확장처럼 얇은 진회색 한 겹)
-    ctx.beginPath()
-    ctx.arc(cx, cy, R, 0, TAU)
-    ctx.strokeStyle = '#37474F'
-    ctx.lineWidth = 3
-    ctx.stroke()
-
-    // 라벨 — 이름만, 흰 글씨 + 어두운 테두리 (확장 스타일)
-    const fontSize = Math.max(12, Math.min(size * 0.042, (size * 2.4) / Math.max(8, items.length)))
-    ctx.font = `800 ${fontSize}px "Noto Sans KR", sans-serif`
-    ctx.textBaseline = 'middle'
-    for (let i = 0; i < items.length; i++) {
-      const { start, end } = segs[i]
-      const mid = (start + end) / 2 + this.rotation
-      ctx.save()
-      ctx.translate(cx, cy)
-      ctx.rotate(mid)
-      ctx.textAlign = 'right'
-      ctx.lineJoin = 'round'
-      ctx.lineWidth = Math.max(2.5, fontSize * 0.18)
-      ctx.strokeStyle = 'rgba(45, 45, 45, 0.8)'
-      ctx.strokeText(items[i].name, R * 0.94, 0, R * 0.6)
-      ctx.fillStyle = '#FFFFFF'
-      ctx.fillText(items[i].name, R * 0.94, 0, R * 0.6)
-      ctx.restore()
     }
 
     // 현재 포인터가 가리키는 항목 이름 (포인터 위 실시간 표시 — 확장의 핵심 연출)
@@ -246,7 +308,7 @@ export class RouletteWheel {
 
   /** 현재 포인터 아래에 있는 칸 인덱스 */
   private indexAtPointer(): number {
-    const segs = this.segmentAngles()
+    const segs = this.syncSegs()
     const a = (((POINTER_ANGLE - this.rotation) % TAU) + TAU) % TAU
     for (let i = 0; i < segs.length; i++) {
       if (a >= segs[i].start && a < segs[i].end) return i
@@ -271,16 +333,16 @@ export class RouletteWheel {
 
   /**
    * [정지] — winnerIndex 칸에 멈추도록 감속을 시작한다.
-   * 현재 회전 속도에서 이어지는 감속 곡선을 계산해 10~13초간 긴장감 있게 멈춘다.
+   * 현재 회전 속도에서 이어지는 감속 곡선을 계산해 7~9초간 긴장감 있게 멈춘다.
    */
   requestStop(winnerIndex: number, onDone: () => void): void {
     if (this.mode !== 'free') return
-    const segs = this.segmentAngles()
+    const segs = this.syncSegs()
     if (winnerIndex < 0 || winnerIndex >= segs.length) return
 
     const now = performance.now()
     const v = this.freeVelocity(now)
-    const duration = 10000 + Math.random() * 3000 // 10~13초 감속 — 정지 후에도 충분히 오래 돌며 긴장감 유지
+    const duration = 7000 + Math.random() * 2000 // 7~9초 감속 — 시원하게 멈춘다
     // easeOutCubic의 t=0 기울기(3·range/duration)가 현재 속도 v와 같아지는 회전량
     const idealRange = (v * duration) / 1000 / 3
 
@@ -323,7 +385,6 @@ export class RouletteWheel {
   private step(now: number): void {
     const dt = Math.min(0.3, (now - this.lastFrameAt) / 1000)
     this.lastFrameAt = now
-    const prevPeg = this.tickKey()
 
     if (this.mode === 'free') {
       this.rotation += this.freeVelocity(now) * dt
@@ -345,11 +406,5 @@ export class RouletteWheel {
     }
 
     this.draw()
-    if (this.tickKey() !== prevPeg && now - this.lastTickAt > 35) {
-      this.lastTickAt = now
-      const progress =
-        this.mode === 'stopping' ? Math.min(1, (now - this.stopStartAt) / this.stopDuration) : 0
-      this.onPegCross?.(progress)
-    }
   }
 }

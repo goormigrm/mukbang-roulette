@@ -83,19 +83,60 @@ function burst(when: number, dur: number, gainV: number, filterFreq: number): vo
 }
 
 /** 돌림판 날개가 핀에 부딪히는 "딸깍" 한 번 — 실제 룰렛 래칫 소리.
- *  룰렛이 핀(24개) 하나를 지날 때마다 호출된다. 빠를 땐 따다다닥, 느려지면 딸깍… 딸깍… 간격이 벌어진다.
- *  progress(0~1): 감속 진행도 — 멈추기 직전일수록 조금 더 밝고 크게 */
-export function tick(progress = 0): void {
-  const detune = 1 + (Math.random() - 0.5) * 0.1 // 핀마다 미세하게 다른 소리
-  // 1) 딱 — 날개가 핀을 때리는 아주 짧은 타격 노이즈
-  burst(0, 0.012, 0.17 + 0.05 * progress, 5200 + 1200 * progress)
+ *  빠를 땐 따다다닥, 느려지면 딸깍… 딸깍… 간격이 벌어진다.
+ *  progress(0~1): 감속 진행도 — [정지] 직후 낮은 음에서 시작해 멈출 때 가장 높은 음이 된다. */
+export function tick(progress = 0, when = 0, gainScale = 1): void {
+  const t = Math.max(0, when)
+  const detune = 1 + (Math.random() - 0.5) * 0.08 // 핀마다 미세하게 다른 소리
+  const g = gainScale
+  // 감속이 진행될수록 낮은음 → 높은음 (귀에 잘 들리도록 지수로 올린다: 640Hz → 2700Hz)
+  const pitch = 640 * Math.pow(4.2, progress) * detune
+  // 1) 딱 — 날개가 핀을 때리는 아주 짧은 타격 노이즈 (같이 밝아진다)
+  burst(t, 0.012, (0.16 + 0.07 * progress) * g, 3200 + 4200 * progress)
   // 2) 톡 — 플라스틱 날개의 짧은 울림 (음정 몸통)
-  beep((1450 + 700 * progress) * detune, 0.022, 'triangle', 0.15 + 0.05 * progress)
-  // 3) 둔탁한 저음 바디 — 판에 전달되는 진동
-  beep(330 * detune, 0.03, 'sine', 0.09)
+  beep(pitch, 0.024, 'triangle', (0.15 + 0.07 * progress) * g, t)
+  beep(pitch * 1.5, 0.016, 'square', 0.05 * g, t) // 카랑한 배음
+  // 3) 둔탁한 저음 바디 — 판에 전달되는 진동 (위로 갈수록 옅어진다)
+  beep(250 * (1 + progress) * detune, 0.03, 'sine', (0.1 - 0.05 * progress) * g, t)
   if (progress > 0.8) {
     // 멈추기 직전엔 저음 심장박동을 한 겹 더
-    beep(110 + 50 * progress, 0.07, 'sine', 0.12)
+    beep(110 + 50 * progress, 0.07, 'sine', 0.12 * g, t)
+  }
+}
+
+// ---- 회전 딸깍 스케줄러 ----
+// 예전에는 화면 프레임마다 딸깍을 울렸는데, 메뉴가 100종을 넘어 프레임이 떨어지면
+// 소리까지 뚝뚝 끊겼다. 이제 오디오 시계에 미리 예약해 두어 화면과 무관하게 고르게 난다.
+const TICK_MAX_RATE = 32 // 초당 최대 딸깍 (그 이상은 사람 귀에 뭉개지고 부하만 커진다)
+let tickTimer: ReturnType<typeof setInterval> | null = null
+let tickNext = 0
+
+/** 회전 시작 — rateFn(초당 딸깍 횟수)과 progressFn(감속 진행도)을 읽어 계속 예약한다 */
+export function startTicking(rateFn: () => number, progressFn: () => number): void {
+  const a = ac()
+  if (!a || tickTimer) return
+  tickNext = a.currentTime + 0.05
+  tickTimer = setInterval(() => {
+    const horizon = a.currentTime + 0.25 // 0.25초 앞까지 미리 예약
+    let guard = 0
+    while (tickNext < horizon && guard++ < 60) {
+      const rate = Math.min(TICK_MAX_RATE, Math.max(0, rateFn()))
+      if (rate < 0.7) {
+        // 거의 멈춤 — 잠시 뒤 다시 본다
+        tickNext = a.currentTime + 0.1
+        break
+      }
+      // 촘촘할수록 한 방씩은 부드럽게 (겹쳐서 뭉개지지 않게)
+      tick(progressFn(), tickNext - a.currentTime, rate > 16 ? 0.62 : 1)
+      tickNext += 1 / rate
+    }
+  }, 70)
+}
+
+export function stopTicking(): void {
+  if (tickTimer !== null) {
+    clearInterval(tickTimer)
+    tickTimer = null
   }
 }
 

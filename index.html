@@ -27,6 +27,12 @@
       </div>
     </header>
 
+    <div id="update-banner" class="update-banner" hidden>
+      <span>🔄 새 버전이 배포되었습니다</span>
+      <span id="update-when" class="update-when"></span>
+      <button type="button" id="btn-update-now" class="btn-ghost small">지금 새로고침</button>
+    </div>
+
     <div id="conn-alert" class="conn-alert" hidden>
       <span class="conn-alert-icon">⚠</span>
       <span id="conn-alert-text">치지직 연결이 끊겼습니다 — 도네이션이 반영되지 않습니다</span>
@@ -36,6 +42,14 @@
     <main class="layout">
       <section class="wheel-area frame">
         <div class="wheel-wrap">
+          <input
+            id="round-title"
+            class="round-title"
+            maxlength="30"
+            autocomplete="off"
+            placeholder="＋ 룰렛 이름"
+            title="이번 판의 이름 (예: 메인 메뉴 / 사이드 / 디저트)"
+          />
           <canvas id="wheel"></canvas>
           <div id="winner-overlay" class="winner-overlay" hidden>
             <div class="stamp" id="winner-stamp">

@@ -287,7 +287,7 @@ export class Store {
 
   /** 이번 판의 이름 설정 (예: 메인 메뉴 / 사이드 / 디저트) */
   setTitle(title: string): void {
-    const next = title.trim().slice(0, 30)
+    const next = title.trim()
     if (next === this.title) return
     this.title = next
     this.changed()

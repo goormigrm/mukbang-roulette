@@ -1065,40 +1065,67 @@ button {
 }
 
 /* 이번 판의 이름 — 룰렛 오른쪽 위 (눌러서 바로 고칠 수 있다) */
+/* 후보 카드 헤더 — 제목 왼쪽, 판 이름 입력 오른쪽 */
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.card-head h2 {
+  margin: 0;
+  flex-shrink: 0;
+}
+
 .round-title {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 2;
-  width: 46%;
-  padding: 6px 12px;
-  border: 2px dashed transparent;
-  border-radius: 10px;
-  background: transparent;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 2px solid var(--cream-dark);
+  border-radius: 8px;
+  background: var(--cream);
   color: var(--red-deep);
   font-family: inherit;
-  font-size: 22px;
+  font-size: 15px;
   font-weight: 900;
-  text-align: right;
-  cursor: pointer;
 }
 
 .round-title::placeholder {
   color: var(--muted);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
-  opacity: 0.75;
+  opacity: 0.85;
 }
 
 .round-title:hover {
-  border-color: var(--cream-dark);
+  border-color: var(--gold);
 }
 
 .round-title:focus {
   outline: none;
-  cursor: text;
   border-color: var(--red-deep);
-  background: rgba(255, 253, 249, 0.95);
+  background: #fffdf9;
+}
+
+/* 룰렛 화면에 걸리는 판 이름 현판 */
+.round-title-display {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  max-width: 52%;
+  padding: 7px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--cream-dark);
+  box-shadow: 3px 3px 0 var(--ink);
+  color: var(--red-deep);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.25;
+  text-align: right;
+  pointer-events: none;
 }
 
 /* 기록 행의 판 이름 */

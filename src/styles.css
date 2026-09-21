@@ -23,6 +23,7 @@ body {
   margin: 0;
   word-break: keep-all; /* 한글을 단어 중간에서 끊지 않는다 */
   overflow-wrap: break-word; /* 한 단어가 줄보다 길 때만 쪼갠다 */
+  text-wrap: pretty; /* 마지막 줄에 한 어절만 덜렁 남는 것(고아 줄)을 막는다 */
   min-height: 100vh;
   min-width: 1100px; /* PC 전용 — 방송 화면(1920×1080) 기준 최적화 */
   color: var(--ink);
@@ -1303,4 +1304,27 @@ button {
 .modal-preset.on {
   background: var(--red-deep);
   color: #fff;
+}
+
+/* ---------- 한글 줄바꿈 ----------
+   keep-all(단어 중간 안 끊기) + pretty(고아 줄 방지)는 body에 걸려 있다.
+   여기서는 "한 문장이 줄 끝에서 어중간하게 갈리는" 것까지 막는다:
+   - .phrase 덩어리는 통째로 다음 줄로 넘어간다 (구 단위 줄바꿈)
+   - 짧은 안내 문구는 balance로 줄 길이를 고르게 나눈다 */
+.phrase {
+  display: inline-block;
+}
+
+.status-bar .big,
+.status-bar .armed-banner,
+.modal-desc,
+.modal-note,
+.modal-error,
+.hint,
+.expand-hint,
+.conn-alert,
+.update-banner,
+.winner-donors,
+.toast {
+  text-wrap: balance;
 }

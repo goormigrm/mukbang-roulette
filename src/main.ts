@@ -5,6 +5,7 @@ import { MIN_SPIN_MS, RouletteWheel, segColor } from './roulette'
 import * as sound from './sound'
 import * as chzzk from './chzzk'
 import * as modal from './modal'
+import { koPhrases } from './text'
 import { watchForUpdates } from './update'
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string): T => document.querySelector(sel) as T
@@ -144,7 +145,14 @@ function renderFeed(): void {
     t.className = 't'
     t.textContent = f.time
     li.appendChild(t)
-    li.appendChild(document.createTextNode(f.text))
+    // 구 단위로 끊어 넣는다 — "반영되지 / 않습니다"처럼 말이 갈리지 않게
+    koPhrases(f.text).forEach((p, i) => {
+      if (i > 0) li.appendChild(document.createTextNode(' '))
+      const span = document.createElement('span')
+      span.className = 'phrase'
+      span.textContent = p
+      li.appendChild(span)
+    })
     elFeedList.appendChild(li)
   }
 }
@@ -218,39 +226,39 @@ function renderStatus(): void {
   switch (store.phase) {
     case 'collect':
       html = store.confirmedWinner
-        ? `<div class="big">오늘의 메뉴: <b>${escapeHtml(store.confirmedWinner)}</b> 🎉</div>`
-        : `<div class="muted">도네이션 ${s.wonPerSlot.toLocaleString('ko-KR')}원당 1칸 · 후보가 들어오면 돌릴 수 있어요</div>`
+        ? `<div class="big"><span class="phrase">오늘의 메뉴:</span> <span class="phrase"><b>${escapeHtml(store.confirmedWinner)}</b> 🎉</span></div>`
+        : `<div class="muted">${ko(`도네이션 ${s.wonPerSlot.toLocaleString('ko-KR')}원당 1칸 · 후보가 들어오면 돌릴 수 있어요`)}</div>`
       break
     case 'closing': {
       const remain = Math.ceil(store.countdownRemainMs / 1000)
       const pct = (store.countdownRemainMs / Math.max(1, store.countdownDurationMs)) * 100
       html = `
-        <div class="big reroll-note">⏱ <span id="remain-sec">${remain}</span>초 뒤 마감! 지금 쏘는 메뉴까지만 룰렛에 들어갑니다</div>
+        <div class="big reroll-note"><span class="phrase">⏱ <span id="remain-sec">${remain}</span>초 뒤 마감!</span> ${ko('지금 쏘는 메뉴까지만 룰렛에 들어갑니다')}</div>
         <div class="timer-track"><div class="timer-fill" id="timer-fill" style="width:${pct}%"></div></div>`
       break
     }
     case 'closed':
       // 마감 표시는 그대로 두고, 방송 딜레이만큼 늦게 도착한 도네는 조용히 더 받는다
       // (리롤 접수가 마감 뒤에도 지각 도네를 인정하는 것과 같은 방식)
-      html = `<div class="big reroll-note">🔒 모집 마감 — 더 이상 메뉴가 추가되지 않습니다. [돌리기!]를 누르세요</div>${
+      html = `<div class="big reroll-note">${ko('🔒 모집 마감 — 더 이상 메뉴가 추가되지 않습니다. [돌리기!]를 누르세요')}</div>${
         store.inGrace()
-          ? `<div class="muted small-text">⏰ 방송 딜레이만큼 잠깐은 늦게 도착한 도네도 반영됩니다</div>`
-          : `<div class="muted small-text">늦게 온 도네를 넣어주고 싶으면 후보 목록에서 직접 추가하세요</div>`
+          ? `<div class="muted small-text">${ko('⏰ 방송 딜레이만큼 잠깐은 늦게 도착한 도네도 반영됩니다')}</div>`
+          : `<div class="muted small-text">${ko('늦게 온 도네를 넣어주고 싶으면 후보 목록에서 직접 추가하세요')}</div>`
       }`
       break
     case 'spinning':
       html = wheel.isStopping
         ? `<div class="big reroll-note">두구두구두구... 🥁</div>`
-        : `<div class="big">🌀 돌아가는 중 — [🛑 정지!]를 누르면 멈춥니다</div>`
+        : `<div class="big">${ko('🌀 돌아가는 중 — [🛑 정지!]를 누르면 멈춥니다')}</div>`
       break
     case 'decision': {
       const creditNote =
         store.rerollCredits > 0
-          ? `<div class="armed-banner">🔄 리롤권 ×${store.rerollCredits} 보유 — 마지막 리롤이 최종!</div>`
+          ? `<div class="armed-banner">${ko(`🔄 리롤권 ×${store.rerollCredits} 보유 — 마지막 리롤이 최종!`)}</div>`
           : ''
       html = store.windowOpened
-        ? `<div class="big reroll-note">⏱ 접수 마감 — 늦게 도착한 ${cost}원 이상 도네도 확정 전까지 인정됩니다</div>${creditNote}`
-        : `<div class="big">🎉 당첨! 아래 버튼에서 선택하세요</div>${creditNote}`
+        ? `<div class="big reroll-note">${ko(`⏱ 접수 마감 — 늦게 도착한 ${cost}원 이상 도네도 확정 전까지 인정됩니다`)}</div>${creditNote}`
+        : `<div class="big">${ko('🎉 당첨! 아래 버튼에서 선택하세요')}</div>${creditNote}`
       break
     }
     case 'window': {
@@ -258,10 +266,10 @@ function renderStatus(): void {
       const pct = (store.countdownRemainMs / Math.max(1, store.countdownDurationMs)) * 100
       const creditNote =
         store.rerollCredits > 0
-          ? `<div class="armed-banner">🔄 리롤권 ×${store.rerollCredits} 누적! 시간이 끝날 때까지 계속 쌓입니다</div>`
+          ? `<div class="armed-banner">${ko(`🔄 리롤권 ×${store.rerollCredits} 누적! 시간이 끝날 때까지 계속 쌓입니다`)}</div>`
           : ''
       html = `
-        <div class="big reroll-note">⏱ <span id="remain-sec">${remain}</span>초 안에 단일 도네 ${cost}원 이상이면 리롤권 적립!</div>
+        <div class="big reroll-note"><span class="phrase">⏱ <span id="remain-sec">${remain}</span>초 안에</span> ${ko(`단일 도네 ${cost}원 이상이면 리롤권 적립!`)}</div>
         <div class="timer-track"><div class="timer-fill" id="timer-fill" style="width:${pct}%"></div></div>
         ${creditNote}`
       break
@@ -329,7 +337,8 @@ function renderRerollBuyers(): void {
 function showDonationToast(d: AppliedDonation): void {
   const el = document.createElement('div')
   el.className = 'toast'
-  el.innerHTML = `🍜 ${escapeHtml(d.nick)}님 → ${escapeHtml(d.name)} <span class="toast-slots">×${d.slots}</span>`
+  // 닉네임과 메뉴가 각각 덩어리 — 줄이 넘어가도 "→ 메뉴 ×3"이 갈리지 않는다
+  el.innerHTML = `<span class="phrase">🍜 ${escapeHtml(d.nick)}님</span> <span class="phrase">→ ${escapeHtml(d.name)} <span class="toast-slots">×${d.slots}</span></span>`
   elToastArea.appendChild(el)
   while (elToastArea.children.length > 3) elToastArea.firstElementChild?.remove()
   setTimeout(() => {
@@ -444,6 +453,13 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 }
 
+/** 안내 문구를 구 단위 덩어리로 감싼다 — 한 문장이 줄 끝에서 어중간하게 갈리지 않게 */
+function ko(text: string): string {
+  return koPhrases(text)
+    .map((p) => `<span class="phrase">${escapeHtml(p)}</span>`)
+    .join(' ')
+}
+
 // ---------- 룰렛 중앙 대형 카운트다운 (10ms 단위) ----------
 let bigTimerRaf = 0
 
@@ -548,13 +564,18 @@ btnOpenWindow.addEventListener('click', () => {
   void modal
     .askAmount({
       title: '🔔 리롤 도네 받기',
-      desc: `지금부터 ${store.settings.rerollWindowSec}초 동안, 이 금액 이상을 한 번에 쏜 사람마다 리롤권이 1개씩 쌓입니다.`,
+      // 구 단위로 끊어 넘긴다 — 한 문장이 줄 끝에서 어중간하게 갈리지 않게
+      desc: [
+        `지금부터 ${store.settings.rerollWindowSec}초 동안,`,
+        '이 금액 이상을 한 번에 쏜 사람마다',
+        '리롤권이 1개씩 쌓입니다.',
+      ],
       label: '이번 회차 리롤 비용',
       value: def,
       min: 1000,
       presets,
       confirmText: '접수 시작',
-      note: '여러 명이 사면 그만큼 쌓이고, 마지막 리롤이 최종입니다. 합산은 인정되지 않습니다.',
+      note: ['여러 명이 사면 그만큼 쌓이고,', '마지막 리롤이 최종입니다.', '합산은 인정되지 않습니다.'],
     })
     .then((cost) => {
       if (cost === null) return

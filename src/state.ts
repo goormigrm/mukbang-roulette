@@ -443,10 +443,7 @@ export class Store {
     let buzzer = false
     if (this.phase === 'closed') {
       if (!this.inGrace()) {
-        this.addFeed(
-          'skip',
-          `[${d.nick}] ${won}원 "${d.message.trim()}" — 마감 후 도착이라 반영 안 됨 (넣어주려면 직접 추가하세요)`,
-        )
+        this.addFeed('skip', `[${d.nick}] ${won}원 "${d.message.trim()}" — 마감 후 도착, 반영 안 됨 (필요하면 직접 추가)`)
         return
       }
       buzzer = true
@@ -646,10 +643,7 @@ export class Store {
       this.graceTimer = null
       if (this.phase !== 'closed') return
       this.graceUntil = 0
-      this.addFeed(
-        'info',
-        '⏰ 버저비터 종료 — 이후 도네는 반영되지 않습니다 (넣어줄지는 직접 추가로 결정하세요)',
-      )
+      this.addFeed('info', '⏰ 버저비터 종료 — 이후 도네는 반영되지 않습니다 (필요하면 직접 추가)')
       this.changed()
     }, sec * 1000)
   }

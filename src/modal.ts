@@ -1,6 +1,8 @@
 // 화면 가운데에 뜨는 우리 디자인 입력 창.
 // 브라우저 기본 prompt/alert는 방송 화면에 그대로 찍히면 볼품이 없어서, 금액 입력은 이 창으로 받는다.
 
+import { koPhrases } from './text'
+
 const $ = <T extends HTMLElement = HTMLElement>(sel: string): T => document.querySelector(sel) as T
 
 const backdrop = $('#modal-backdrop')
@@ -19,8 +21,8 @@ const btnOk = $<HTMLButtonElement>('#modal-ok')
 export interface AmountDialogOptions {
   /** 창 제목 (예: 🔔 리롤 도네 받기) */
   title: string
-  /** 제목 아래 설명 한 줄 */
-  desc?: string
+  /** 제목 아래 설명. 여러 개를 주면 **구(句) 단위로 끊어** 줄을 넘긴다(문장이 어중간하게 갈리지 않게) */
+  desc?: string | string[]
   /** 입력칸 위 라벨 */
   label: string
   /** 처음 채워둘 금액 */
@@ -31,8 +33,8 @@ export interface AmountDialogOptions {
   presets?: number[]
   /** 확인 버튼 글자 */
   confirmText?: string
-  /** 맨 아래 작은 안내 */
-  note?: string
+  /** 맨 아래 작은 안내. desc와 같이 여러 개를 주면 구 단위로 끊어 넘긴다 */
+  note?: string | string[]
 }
 
 let resolveCurrent: ((v: number | null) => void) | null = null
@@ -71,6 +73,22 @@ function close(value: number | null): void {
   done(value)
 }
 
+/** 문구를 구(句) 단위 덩어리로 넣는다 — 덩어리 통째로 다음 줄로 넘어가므로
+ *  "…합산은 / 인정되지 않습니다"처럼 한 문장이 어중간하게 갈리지 않는다 */
+function setPhrases(el: HTMLElement, text: string | string[] | undefined): void {
+  el.textContent = ''
+  // 배열이면 준 대로, 한 문장이면 자동으로 구 단위로 끊는다
+  const parts = (typeof text === 'string' ? koPhrases(text) : (text ?? [])).filter((p) => p.trim())
+  el.hidden = parts.length === 0
+  parts.forEach((p, i) => {
+    const span = document.createElement('span')
+    span.className = 'phrase'
+    span.textContent = p
+    el.appendChild(span)
+    if (i < parts.length - 1) el.appendChild(document.createTextNode(' '))
+  })
+}
+
 function showError(msg: string): void {
   elError.textContent = msg
   elError.hidden = false
@@ -83,11 +101,9 @@ function showError(msg: string): void {
 export function askAmount(opts: AmountDialogOptions): Promise<number | null> {
   close(null) // 혹시 열려 있으면 먼저 닫는다
   elTitle.textContent = opts.title
-  elDesc.textContent = opts.desc ?? ''
-  elDesc.hidden = !opts.desc
+  setPhrases(elDesc, opts.desc)
   elLabel.textContent = opts.label
-  elNote.textContent = opts.note ?? ''
-  elNote.hidden = !opts.note
+  setPhrases(elNote, opts.note)
   btnOk.textContent = opts.confirmText ?? '확인'
   elError.hidden = true
   elInput.value = String(opts.value)

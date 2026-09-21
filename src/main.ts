@@ -4,6 +4,7 @@ import type { AppliedDonation, MenuItem, Round } from './state'
 import { MIN_SPIN_MS, RouletteWheel, segColor } from './roulette'
 import * as sound from './sound'
 import * as chzzk from './chzzk'
+import * as modal from './modal'
 import { watchForUpdates } from './update'
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string): T => document.querySelector(sel) as T
@@ -173,12 +174,6 @@ function renderHistory(): void {
     const caret = document.createElement('span')
     caret.className = 'caret'
     caret.textContent = '▶'
-    if (r.title) {
-      const tag = document.createElement('span')
-      tag.className = 'round-title-tag'
-      tag.textContent = r.title
-      head.appendChild(tag)
-    }
     const left = document.createElement('span')
     left.className = 'round-when'
     left.textContent = `${fmtDate(r.endedAt)} · ${r.menus.length}종`
@@ -187,6 +182,16 @@ function renderHistory(): void {
     const chance = r.chance ? ` ${r.chance.toFixed(1)}%` : ''
     right.textContent = `🏆 ${r.winner}${chance}${r.rerollCount > 0 ? ` (리롤 ${r.rerollCount}회)` : ''}`
     head.append(caret, left, right)
+
+    // 룰렛 이름 — 그 판에 이름을 안 적었으면 아무것도 붙이지 않고 공란으로 둔다
+    const title = (r.title ?? '').trim()
+    if (title) {
+      const tag = document.createElement('span')
+      tag.className = 'round-title-tag'
+      tag.textContent = `🏷 ${title}`
+      tag.title = `룰렛 이름: ${title}`
+      head.insertBefore(tag, left)
+    }
 
     const menus = document.createElement('ul')
     menus.className = 'round-menus'
@@ -225,7 +230,11 @@ function renderStatus(): void {
       break
     }
     case 'closed':
-      html = `<div class="big reroll-note">🔒 모집 마감 — 더 이상 메뉴가 추가되지 않습니다. [돌리기!]를 누르세요</div>`
+      html = store.inGrace()
+        ? // 방송 딜레이 때문에 시청자 화면에서는 아직 카운트다운이 끝나지 않았을 시간
+          `<div class="big buzzer-note">⏰ 버저비터! <span id="remain-sec">${Math.ceil(store.graceRemainMs() / 1000)}</span>초 — 방송 딜레이만큼 지금 도착하는 도네까지 받습니다</div>`
+        : `<div class="big reroll-note">🔒 모집 마감 — 더 이상 메뉴가 추가되지 않습니다. [돌리기!]를 누르세요</div>
+           <div class="muted small-text">늦게 온 도네를 넣어주고 싶으면 후보 목록에서 직접 추가하세요</div>`
       break
     case 'spinning':
       html = wheel.isStopping
@@ -447,21 +456,43 @@ function countdownActive(): boolean {
   return store.phase === 'window' || store.phase === 'closing'
 }
 
+/** 지금 화면에 띄울 큰 시계 — 리롤 접수·모집 마감·버저비터(마감 직후 딜레이 보정) */
+function timerTarget(): { deadline: number; buzzer: boolean } | null {
+  if (countdownActive()) return { deadline: store.countdownDeadline, buzzer: false }
+  if (store.inGrace()) return { deadline: store.graceUntil, buzzer: true }
+  return null
+}
+
+let lastBuzzerUnit = -1
+
 function bigTimerFrame(): void {
-  if (!countdownActive()) {
+  const t = timerTarget()
+  if (!t) {
     elBigTimer.hidden = true
     return
   }
-  const remain = Math.max(0, store.countdownDeadline - Date.now())
+  const remain = Math.max(0, t.deadline - Date.now())
   elBigTimer.textContent = fmtRemain(remain)
-  elBigTimer.classList.toggle('urgent', remain <= 10_000)
+  elBigTimer.classList.toggle('urgent', !t.buzzer && remain <= 10_000)
   elBigTimer.classList.toggle('closing', store.phase === 'closing')
+  elBigTimer.classList.toggle('buzzer', t.buzzer)
+  if (t.buzzer) {
+    // 버저비터 동안에는 스토어 tick 타이머가 돌지 않으므로 여기서 초·소리를 함께 챙긴다
+    const sec = document.getElementById('remain-sec')
+    if (sec) sec.textContent = String(Math.ceil(remain / 1000))
+    const unit = Math.floor(remain / 500)
+    if (unit !== lastBuzzerUnit) {
+      lastBuzzerUnit = unit
+      if (store.settings.sound && remain > 0) sound.clockTick(true, 1 - remain / 5000)
+    }
+  }
   bigTimerRaf = requestAnimationFrame(bigTimerFrame)
 }
 
 function renderBigTimer(): void {
   cancelAnimationFrame(bigTimerRaf)
-  if (countdownActive()) {
+  if (!store.inGrace()) lastBuzzerUnit = -1
+  if (timerTarget()) {
     elBigTimer.hidden = false
     bigTimerFrame()
   } else {
@@ -527,16 +558,26 @@ btnSpin.addEventListener('click', () => {
 })
 btnCloseEntry.addEventListener('click', () => store.startClosing())
 btnOpenWindow.addEventListener('click', () => {
-  // 회차마다 리롤 금액을 올려 받는 운영(2만 → 4만 → 10만)을 위해 접수 시작 시 금액 입력
+  // 회차마다 리롤 금액을 올려 받는 운영(2만 → 4만 → 10만)을 위해 접수 시작 시 금액 입력.
+  // 방송 화면에 그대로 찍히므로 브라우저 기본 prompt 대신 가운데 뜨는 우리 창으로 받는다.
   const def = store.effectiveRerollCost()
-  const input = prompt('이번 리롤 비용(원)을 입력하세요', String(def))
-  if (input === null) return
-  const cost = Number(input.replace(/[,\s원]/g, ''))
-  if (!Number.isFinite(cost) || cost < 1000) {
-    alert('1,000원 이상의 숫자를 입력해주세요.')
-    return
-  }
-  store.startRerollWindow(cost)
+  // 회차를 올려 받을 때 한 번에 고르는 금액 (2만 → 3만 → 4만 → 5만 → 10만)
+  const presets = [20000, 30000, 40000, 50000, 100000]
+  void modal
+    .askAmount({
+      title: '🔔 리롤 도네 받기',
+      desc: `지금부터 ${store.settings.rerollWindowSec}초 동안, 이 금액 이상을 한 번에 쏜 사람마다 리롤권이 1개씩 쌓입니다.`,
+      label: '이번 회차 리롤 비용',
+      value: def,
+      min: 1000,
+      presets,
+      confirmText: '접수 시작',
+      note: '여러 명이 사면 그만큼 쌓이고, 마지막 리롤이 최종입니다. 합산은 인정되지 않습니다.',
+    })
+    .then((cost) => {
+      if (cost === null) return
+      store.startRerollWindow(cost)
+    })
 })
 btnReroll.addEventListener('click', () => doSpin(true))
 btnConfirm.addEventListener('click', () => {
@@ -561,6 +602,8 @@ function isTypingTarget(t: EventTarget | null): boolean {
   return t instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)
 }
 document.addEventListener('keydown', (e) => {
+  // 입력 창이 떠 있는 동안에는 뒤쪽 버튼이 눌리지 않게 한다 (Enter는 창의 [확인]이 받는다)
+  if (modal.isOpen()) return
   if (isTypingTarget(e.target) || e.ctrlKey || e.altKey || e.metaKey) return
   let target: HTMLButtonElement | null = null
   if (e.code === 'Space') target = btnSpin
@@ -679,6 +722,7 @@ function initSettingsInputs(): void {
   $<HTMLInputElement>('#set-reroll-cost').value = String(store.settings.rerollCost)
   $<HTMLInputElement>('#set-reroll-sec').value = String(store.settings.rerollWindowSec)
   $<HTMLInputElement>('#set-closing-sec').value = String(store.settings.closingSec)
+  $<HTMLInputElement>('#set-grace-sec').value = String(store.settings.graceSec)
   $<HTMLInputElement>('#set-min-amount').value = String(store.settings.minAmount)
   $<HTMLInputElement>('#set-won-per-slot').value = String(store.settings.wonPerSlot)
   $<HTMLInputElement>('#set-sound').checked = store.settings.sound
@@ -697,6 +741,8 @@ function applySettingsInputs(): void {
     // 상한 없음, 0초 방지만
     rerollWindowSec: Math.max(1, Math.floor(num('#set-reroll-sec', 60))),
     closingSec: Math.max(1, Math.floor(num('#set-closing-sec', 30))),
+    // 0이면 버저비터 없이 칼같이 마감
+    graceSec: Math.max(0, Math.floor(num('#set-grace-sec', 5))),
     // 0원 설정 가능 (모든 도네 인정)
     minAmount: Math.max(0, Math.floor(num('#set-min-amount', 1000))),
     // 0 나눗셈 방지만
@@ -705,7 +751,7 @@ function applySettingsInputs(): void {
   })
 }
 
-for (const id of ['#set-reroll-cost', '#set-reroll-sec', '#set-closing-sec', '#set-min-amount', '#set-won-per-slot', '#set-sound']) {
+for (const id of ['#set-reroll-cost', '#set-reroll-sec', '#set-closing-sec', '#set-grace-sec', '#set-min-amount', '#set-won-per-slot', '#set-sound']) {
   $(id).addEventListener('change', applySettingsInputs)
 }
 initSettingsInputs()

@@ -31,6 +31,8 @@ export interface Settings {
   rerollWindowSec: number
   /** [마감] 버튼 한 번에 주는 모집 마감 카운트다운 초 (다시 누르면 그만큼 연장) */
   closingSec: number
+  /** 마감 직후 버저비터(방송 딜레이 보정)로 더 받아주는 초 */
+  graceSec: number
   minAmount: number
   wonPerSlot: number
   sound: boolean
@@ -65,12 +67,29 @@ export const DEFAULT_SETTINGS: Settings = {
   rerollCost: 20000,
   rerollWindowSec: 60,
   closingSec: 30,
+  graceSec: 5,
   minAmount: 1000,
   wonPerSlot: 1000,
   sound: true,
   clientId: '',
   clientSecret: '',
   proxyUrl: '',
+}
+
+// ---- 메뉴 이름 정리 (같은 메뉴를 한 칸에 모으기) ----
+// 시청자는 같은 메뉴를 제각각 적어 보낸다 — "부대 찌개", "부대찌개", "부대찌개 추가".
+// 셋 다 한 항목으로 모으되, 화면에 남는 이름은 **먼저 등록된 쪽**을 그대로 둔다.
+
+/** 이름 뒤에 붙은 "추가"를 떼어낸다. 떼고 나면 빈 이름이 되는 경우("추가")는 그대로 둔다 */
+export function canonicalMenuName(raw: string): string {
+  const name = raw.trim()
+  const stripped = name.replace(/\s*추가$/, '').trim()
+  return stripped || name
+}
+
+/** 비교용 키 — 띄어쓰기 차이와 뒤에 붙은 "추가"를 무시한다 */
+export function menuKey(raw: string): string {
+  return canonicalMenuName(raw).replace(/\s+/g, '')
 }
 
 const LS_SETTINGS = 'mr:settings'
@@ -126,12 +145,15 @@ export class Store {
   currentRerollCost: number | null = null
   /** 이번 당첨 결과에 대해 접수를 연 적이 있는지 — 마감 후 늦게 도착한 도네 인정용 */
   windowOpened = false
+  /** 버저비터 마감 시각 (epoch ms) — 0이면 진행 중이 아님. 방송 딜레이 보정용 */
+  graceUntil = 0
 
   private pendingWinner: MenuItem | null = null
   private seen = new Set<string>()
   private nextMenuId = 1
   private nextRoundId = 1
   private countdownTimer: ReturnType<typeof setInterval> | null = null
+  private graceTimer: ReturnType<typeof setTimeout> | null = null
   /** 카운트다운 마감 시각 (epoch ms) — UI가 10ms 단위로 그릴 때 직접 읽는다 */
   countdownDeadline = 0
   /** 이번 카운트다운의 전체 길이(ms) — 도중에 설정을 바꿔도 진행바 비율이 틀어지지 않게 고정 */
@@ -304,18 +326,31 @@ export class Store {
     return this.menus.reduce((a, m) => a + m.weight, 0)
   }
 
-  addMenu(name: string, weight: number, donor?: string): void {
+  /** 띄어쓰기·뒤에 붙은 "추가"를 무시하고 같은 메뉴를 찾는다 (먼저 등록된 항목이 이긴다) */
+  findMenu(name: string): MenuItem | undefined {
+    const key = menuKey(name)
+    if (!key) return undefined
+    return this.menus.find((m) => menuKey(m.name) === key)
+  }
+
+  /** 메뉴 칸 더하기 — 이미 있는 메뉴면 그 항목에 합쳐지고, 반영된 이름을 돌려준다 */
+  addMenu(name: string, weight: number, donor?: string): string | null {
     // 40자 컷은 룰렛 라벨·목록 표시가 깨지지 않게 하는 최소한의 안전장치
-    name = name.trim().slice(0, 40)
-    if (!name || weight < 1) return
-    const existing = this.menus.find((m) => m.name === name)
+    name = canonicalMenuName(name).slice(0, 40).trim()
+    if (!name || weight < 1) return null
+    const existing = this.findMenu(name)
     if (existing) {
       existing.weight += weight
       if (donor && !existing.donors.includes(donor)) existing.donors.push(donor)
+      // 띄어쓰기·"추가" 때문에 다른 이름으로 보이던 것이 합쳐졌다면 왜 그렇게 됐는지 남긴다
+      if (existing.name !== name) {
+        this.addFeed('info', `✍ "${name}" → 이미 있는 "${existing.name}"에 합쳤습니다 (+${weight}칸)`)
+      }
     } else {
       this.menus.push({ id: this.nextMenuId++, name, weight, donors: donor ? [donor] : [] })
     }
     this.changed()
+    return existing ? existing.name : name
   }
 
   removeMenu(id: number): void {
@@ -334,6 +369,7 @@ export class Store {
   /** 룰렛 전체 비우기 — 후보뿐 아니라 진행 중 라운드(당첨·리롤권·접수 타이머)도 모집 상태로 되돌린다 */
   clearMenus(): void {
     this.stopCountdown()
+    this.stopGrace()
     this.menus = []
     this.phase = 'collect'
     this.winner = null
@@ -401,10 +437,19 @@ export class Store {
       return
     }
 
-    // 모집 마감 후 도네는 이번 판에 반영하지 않는다
+    // 모집 마감 후 도네는 이번 판에 반영하지 않는다.
+    // 다만 방송은 실시간보다 몇 초 늦게 나가므로, 마감 직후 몇 초(기본 5초)에 도착한 도네는
+    // "버저비터"로 인정한다 — 시청자 화면에서는 아직 카운트다운이 끝나지 않았을 시각이다.
+    let buzzer = false
     if (this.phase === 'closed') {
-      this.addFeed('skip', `[${d.nick}] ${won}원 — 모집이 마감되어 이번 판에는 반영되지 않습니다`)
-      return
+      if (!this.inGrace()) {
+        this.addFeed(
+          'skip',
+          `[${d.nick}] ${won}원 "${d.message.trim()}" — 마감 후 도착이라 반영 안 됨 (넣어주려면 직접 추가하세요)`,
+        )
+        return
+      }
+      buzzer = true
     }
 
     // 스핀 중 도네는 전부 무시
@@ -424,21 +469,28 @@ export class Store {
       return
     }
 
-    this.applyDonation(d)
+    this.applyDonation(d, buzzer)
   }
 
-  private applyDonation(d: DonationInput): void {
+  private applyDonation(d: DonationInput, buzzer = false): void {
     const slots = Math.floor(d.amount / this.settings.wonPerSlot)
     if (slots < 1) return
-    const name = d.message.trim() ? d.message.trim().slice(0, 40) : `${d.nick}의 추천`
-    const existing = this.menus.find((m) => m.name === name)
+    // 띄어쓰기만 다르거나 뒤에 "추가"가 붙은 이름은 먼저 등록된 메뉴에 합친다
+    const typed = d.message.trim() ? canonicalMenuName(d.message).slice(0, 40).trim() : ''
+    const asked = typed || `${d.nick}의 추천`
+    const existing = this.findMenu(asked)
+    const name = existing ? existing.name : asked
     if (existing) {
       existing.weight += slots
       if (!existing.donors.includes(d.nick)) existing.donors.push(d.nick)
     } else {
       this.menus.push({ id: this.nextMenuId++, name, weight: slots, donors: [d.nick] })
     }
-    this.addFeed('add', `🍜 [${d.nick}] ${d.amount.toLocaleString('ko-KR')}원 → "${name}" ×${slots}`)
+    const merged = existing && name !== asked ? ` (="${asked}")` : ''
+    this.addFeed(
+      'add',
+      `${buzzer ? '⏰ 버저비터! ' : ''}🍜 [${d.nick}] ${d.amount.toLocaleString('ko-KR')}원 → "${name}"${merged} ×${slots}`,
+    )
     this.emit('donation', { nick: d.nick, amount: d.amount, name, slots } satisfies AppliedDonation)
   }
 
@@ -469,6 +521,7 @@ export class Store {
       this.addFeed('info', '🔁 다시 돌리기 — 이전 결과를 무시하고 새로 돌립니다')
     }
 
+    this.stopGrace()
     this.phase = 'spinning'
     this.pendingWinner = null
     this.winner = null
@@ -544,9 +597,10 @@ export class Store {
       if (this.countdownRemainMs > 0) return
       this.stopCountdown()
       if (this.phase === 'closing') {
-        // 모집 마감 — 이 순간부터 도네는 메뉴에 반영되지 않는다. 스핀은 스트리머가 [돌리기]를 눌러야 시작.
+        // 모집 마감 — 스핀은 스트리머가 [돌리기]를 눌러야 시작.
+        // 방송 딜레이만큼(기본 5초) 버저비터를 열어두고, 그 뒤에 오는 도네부터 진짜로 막는다.
         this.phase = 'closed'
-        this.addFeed('info', '🔒 모집 마감! 이후 도네는 이번 판에 반영되지 않습니다 — [돌리기]를 누르세요')
+        this.startGrace()
       } else {
         // 리롤 접수는 마감돼도 자동 확정하지 않는다 — 연동 지연으로 늦게 도착하는 도네를
         // 확정 전까지 인정하고, 스트리머가 재접수/확정을 선택한다
@@ -564,11 +618,56 @@ export class Store {
     }
   }
 
+  // ---- 버저비터 (마감 직후 방송 딜레이 보정) ----
+  /** 마감 카운트다운이 0이 된 뒤 몇 초 동안 더 받아주는 중인가 */
+  inGrace(): boolean {
+    return this.phase === 'closed' && this.graceUntil > Date.now()
+  }
+
+  /** 버저비터 남은 시간(ms) */
+  graceRemainMs(): number {
+    return this.inGrace() ? this.graceUntil - Date.now() : 0
+  }
+
+  /** 마감 순간 호출 — 딜레이 보정 시간을 열어두고, 끝나면 한 번 더 화면을 갱신한다 */
+  private startGrace(): void {
+    this.stopGrace()
+    const sec = Math.max(0, Math.floor(this.settings.graceSec))
+    if (sec <= 0) {
+      this.addFeed('info', '🔒 모집 마감! 이후 도네는 이번 판에 반영되지 않습니다 — [돌리기]를 누르세요')
+      return
+    }
+    this.graceUntil = Date.now() + sec * 1000
+    this.addFeed(
+      'info',
+      `🔒 모집 마감! 방송 딜레이만큼 ${sec}초 동안 도착하는 도네까지는 버저비터로 인정합니다`,
+    )
+    this.graceTimer = setTimeout(() => {
+      this.graceTimer = null
+      if (this.phase !== 'closed') return
+      this.graceUntil = 0
+      this.addFeed(
+        'info',
+        '⏰ 버저비터 종료 — 이후 도네는 반영되지 않습니다 (넣어줄지는 직접 추가로 결정하세요)',
+      )
+      this.changed()
+    }, sec * 1000)
+  }
+
+  private stopGrace(): void {
+    if (this.graceTimer !== null) {
+      clearTimeout(this.graceTimer)
+      this.graceTimer = null
+    }
+    this.graceUntil = 0
+  }
+
   /** [⏱ 마감] — 모집 마감까지 N초. 이미 카운트다운 중이면 그만큼 연장한다(횟수 제한 없음).
    *  카운트다운 동안에도 도네는 정상적으로 메뉴에 반영된다 — 마감되는 순간부터 반영이 멈춘다. */
   startClosing(sec = this.settings.closingSec): void {
     if (this.phase !== 'collect' && this.phase !== 'closing' && this.phase !== 'closed') return
     if (this.menus.length < 1) return
+    this.stopGrace() // 다시 받기로 했으면 버저비터는 끝낸다
     const add = Math.max(1, Math.floor(sec))
     if (this.phase === 'closing') {
       this.startCountdown(this.countdownDeadline + add * 1000, this.countdownDurationMs + add * 1000)
@@ -644,12 +743,19 @@ export class Store {
     if (!Array.isArray(raw)) throw new Error('형식이 올바르지 않습니다 (menus 배열 필요)')
     const menus: MenuItem[] = []
     for (const m of raw) {
-      const name = String(m?.name ?? '').trim().slice(0, 40)
+      const name = canonicalMenuName(String(m?.name ?? '')).slice(0, 40).trim()
       const weight = Math.max(1, Math.floor(Number((m as { weight?: number })?.weight) || 1))
       if (!name) continue
-      const existing = menus.find((x) => x.name === name)
-      if (existing) existing.weight += weight
-      else
+      // 파일 안에서도 띄어쓰기만 다른 같은 메뉴는 먼저 나온 쪽으로 합친다
+      const key = menuKey(name)
+      const existing = menus.find((x) => menuKey(x.name) === key)
+      if (existing) {
+        existing.weight += weight
+        const donors = (m as { donors?: string[] }).donors
+        if (Array.isArray(donors)) {
+          for (const dn of donors.map(String)) if (!existing.donors.includes(dn)) existing.donors.push(dn)
+        }
+      } else {
         menus.push({
           id: this.nextMenuId++,
           name,
@@ -658,6 +764,7 @@ export class Store {
             ? ((m as { donors?: string[] }).donors as string[]).map(String)
             : [],
         })
+      }
     }
     if (menus.length === 0) throw new Error('불러올 메뉴가 없습니다')
     this.menus = menus

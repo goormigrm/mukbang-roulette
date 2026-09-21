@@ -136,6 +136,9 @@
             <label>리롤 비용 (원, 단일 도네 기준) <input id="set-reroll-cost" type="number" step="1000" min="1000" /></label>
             <label>리롤 제한시간 (초) <input id="set-reroll-sec" type="number" min="1" /></label>
             <label>모집 마감 카운트다운 (초) <input id="set-closing-sec" type="number" min="1" /></label>
+            <label title="방송은 실시간보다 몇 초 늦게 나갑니다. 마감된 뒤 이 시간 안에 도착한 도네까지는 버저비터로 인정합니다 (0이면 끄기)">
+              버저비터 — 마감 후 추가 인정 (초) <input id="set-grace-sec" type="number" min="0" />
+            </label>
             <label>최소 인정 금액 (원) <input id="set-min-amount" type="number" step="500" min="0" /></label>
             <label>1칸당 금액 (원) <input id="set-won-per-slot" type="number" min="1" /></label>
             <label class="check"><input id="set-sound" type="checkbox" /> 효과음 켜기</label>
@@ -145,6 +148,35 @@
     </main>
 
     <div id="confetti" class="confetti"></div>
+
+    <!-- 화면 가운데 입력 창 (브라우저 기본 prompt 대신) -->
+    <div id="modal-backdrop" class="modal-backdrop" hidden>
+      <div id="modal-card" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <h3 id="modal-title" class="modal-title"></h3>
+        <p id="modal-desc" class="modal-desc"></p>
+        <form id="modal-form" class="modal-form">
+          <label id="modal-label" class="modal-label" for="modal-input"></label>
+          <div class="modal-input-row">
+            <input
+              id="modal-input"
+              class="modal-input"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <span class="modal-unit">원</span>
+          </div>
+          <div id="modal-presets" class="modal-presets"></div>
+          <p id="modal-error" class="modal-error" hidden></p>
+          <p id="modal-note" class="modal-note"></p>
+          <div class="modal-actions">
+            <button type="button" id="modal-cancel" class="btn-ghost">취소</button>
+            <button type="submit" id="modal-ok" class="btn-primary small">확인</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <footer class="footer">© 2026 goormigrm · 철면수심 먹방 룰렛</footer>
 

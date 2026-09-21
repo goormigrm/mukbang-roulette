@@ -1138,3 +1138,193 @@ button {
   font-size: 12px;
   font-weight: 900;
 }
+
+/* ---------- 화면 가운데 입력 창 (기본 prompt 대체) ---------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(14, 8, 8, 0.55);
+  backdrop-filter: blur(2px);
+  animation: modal-fade 0.15s ease-out;
+}
+
+.modal-card {
+  width: min(420px, 100%);
+  padding: 22px 24px 18px;
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  background: var(--cream);
+  box-shadow: 8px 8px 0 var(--ink), 0 24px 60px rgba(14, 8, 8, 0.45);
+  animation: modal-pop 0.18s cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+
+.modal-title {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--red-deep);
+}
+
+.modal-desc {
+  margin: 0 0 14px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-label {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.modal-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 26px;
+  font-weight: 900;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.modal-input:focus {
+  outline: none;
+  border-color: var(--red-deep);
+  box-shadow: 0 0 0 4px rgba(200, 16, 46, 0.18);
+}
+
+.modal-unit {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--ink);
+}
+
+.modal-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modal-preset {
+  padding: 6px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--cream-dark);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.modal-preset:hover {
+  background: var(--gold);
+}
+
+.modal-error {
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #ffe7e7;
+  border-left: 4px solid var(--red-deep);
+  color: var(--red-deep);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.modal-note {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.modal-card.shake {
+  animation: modal-shake 0.3s;
+}
+
+@keyframes modal-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-pop {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+}
+
+@keyframes modal-shake {
+  25% {
+    transform: translateX(-7px);
+  }
+  50% {
+    transform: translateX(7px);
+  }
+  75% {
+    transform: translateX(-4px);
+  }
+}
+
+/* ---------- 버저비터 (마감 직후 딜레이 보정) ---------- */
+.big-timer.buzzer {
+  color: #fff;
+  background: linear-gradient(180deg, #ff8a3d, #e0451f);
+  border-color: var(--ink);
+  font-size: clamp(48px, 6vw, 84px);
+  animation: timer-urgent 0.4s ease-in-out infinite;
+}
+
+.status-bar .buzzer-note {
+  color: #c2410c;
+}
+
+.buzzer-badge {
+  align-self: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #ff8a3d;
+  border: 2px solid var(--ink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+/* 지금 고른 금액 버튼 */
+.modal-preset.on {
+  background: var(--red-deep);
+  color: #fff;
+}

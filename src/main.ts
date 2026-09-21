@@ -230,11 +230,13 @@ function renderStatus(): void {
       break
     }
     case 'closed':
-      html = store.inGrace()
-        ? // 방송 딜레이 때문에 시청자 화면에서는 아직 카운트다운이 끝나지 않았을 시간
-          `<div class="big buzzer-note">⏰ 버저비터! <span id="remain-sec">${Math.ceil(store.graceRemainMs() / 1000)}</span>초 — 방송 딜레이만큼 지금 도착하는 도네까지 받습니다</div>`
-        : `<div class="big reroll-note">🔒 모집 마감 — 더 이상 메뉴가 추가되지 않습니다. [돌리기!]를 누르세요</div>
-           <div class="muted small-text">늦게 온 도네를 넣어주고 싶으면 후보 목록에서 직접 추가하세요</div>`
+      // 마감 표시는 그대로 두고, 방송 딜레이만큼 늦게 도착한 도네는 조용히 더 받는다
+      // (리롤 접수가 마감 뒤에도 지각 도네를 인정하는 것과 같은 방식)
+      html = `<div class="big reroll-note">🔒 모집 마감 — 더 이상 메뉴가 추가되지 않습니다. [돌리기!]를 누르세요</div>${
+        store.inGrace()
+          ? `<div class="muted small-text">⏰ 방송 딜레이만큼 잠깐은 늦게 도착한 도네도 반영됩니다</div>`
+          : `<div class="muted small-text">늦게 온 도네를 넣어주고 싶으면 후보 목록에서 직접 추가하세요</div>`
+      }`
       break
     case 'spinning':
       html = wheel.isStopping
@@ -456,43 +458,23 @@ function countdownActive(): boolean {
   return store.phase === 'window' || store.phase === 'closing'
 }
 
-/** 지금 화면에 띄울 큰 시계 — 리롤 접수·모집 마감·버저비터(마감 직후 딜레이 보정) */
-function timerTarget(): { deadline: number; buzzer: boolean } | null {
-  if (countdownActive()) return { deadline: store.countdownDeadline, buzzer: false }
-  if (store.inGrace()) return { deadline: store.graceUntil, buzzer: true }
-  return null
-}
-
-let lastBuzzerUnit = -1
-
 function bigTimerFrame(): void {
-  const t = timerTarget()
-  if (!t) {
+  // 버저비터(마감 직후 딜레이 보정)는 일부러 큰 시계를 띄우지 않는다 —
+  // 리롤 접수와 같은 방식으로, 화면상 시간은 끝났지만 반영만 조용히 더 받는다.
+  if (!countdownActive()) {
     elBigTimer.hidden = true
     return
   }
-  const remain = Math.max(0, t.deadline - Date.now())
+  const remain = Math.max(0, store.countdownDeadline - Date.now())
   elBigTimer.textContent = fmtRemain(remain)
-  elBigTimer.classList.toggle('urgent', !t.buzzer && remain <= 10_000)
+  elBigTimer.classList.toggle('urgent', remain <= 10_000)
   elBigTimer.classList.toggle('closing', store.phase === 'closing')
-  elBigTimer.classList.toggle('buzzer', t.buzzer)
-  if (t.buzzer) {
-    // 버저비터 동안에는 스토어 tick 타이머가 돌지 않으므로 여기서 초·소리를 함께 챙긴다
-    const sec = document.getElementById('remain-sec')
-    if (sec) sec.textContent = String(Math.ceil(remain / 1000))
-    const unit = Math.floor(remain / 500)
-    if (unit !== lastBuzzerUnit) {
-      lastBuzzerUnit = unit
-      if (store.settings.sound && remain > 0) sound.clockTick(true, 1 - remain / 5000)
-    }
-  }
   bigTimerRaf = requestAnimationFrame(bigTimerFrame)
 }
 
 function renderBigTimer(): void {
   cancelAnimationFrame(bigTimerRaf)
-  if (!store.inGrace()) lastBuzzerUnit = -1
-  if (timerTarget()) {
+  if (countdownActive()) {
     elBigTimer.hidden = false
     bigTimerFrame()
   } else {

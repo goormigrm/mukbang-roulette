@@ -1299,30 +1299,6 @@ button {
   }
 }
 
-/* ---------- 버저비터 (마감 직후 딜레이 보정) ---------- */
-.big-timer.buzzer {
-  color: #fff;
-  background: linear-gradient(180deg, #ff8a3d, #e0451f);
-  border-color: var(--ink);
-  font-size: clamp(48px, 6vw, 84px);
-  animation: timer-urgent 0.4s ease-in-out infinite;
-}
-
-.status-bar .buzzer-note {
-  color: #c2410c;
-}
-
-.buzzer-badge {
-  align-self: center;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: #ff8a3d;
-  border: 2px solid var(--ink);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 900;
-}
-
 /* 지금 고른 금액 버튼 */
 .modal-preset.on {
   background: var(--red-deep);

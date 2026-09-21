@@ -82,22 +82,46 @@ function burst(when: number, dur: number, gainV: number, filterFreq: number): vo
   src.stop(t + dur)
 }
 
+/** 딸깍 한 번의 결 — 매번 같은 소리를 내면 기계음처럼 단조로워진다.
+ *  실제 돌림판은 날개가 핀을 때릴 때마다 조금씩 다른 소리가 나므로 세 가지를 섞는다. */
+let pegVariant = 0
+
 /** 돌림판 날개가 핀에 부딪히는 "딸깍" 한 번 — 실제 룰렛 래칫 소리.
  *  빠를 땐 따다다닥, 느려지면 딸깍… 딸깍… 간격이 벌어진다.
- *  progress(0~1): 감속 진행도 — [정지] 직후 낮은 음에서 시작해 멈출 때 가장 높은 음이 된다. */
+ *  세 가지 결(딱: 마른 타격 · 탁: 몸통 있는 플라스틱 · 따각: 날개가 한 번 튕기는 두 겹)을
+ *  바로 앞과 겹치지 않게 번갈아 내고, 음정·세기도 한 방씩 흔들어 준다.
+ *  progress(0~1): 감속 진행도 — [정지] 직후부터 멈출 때까지 음정이 올라간다. */
 export function tick(progress = 0, when = 0, gainScale = 1): void {
   const t = Math.max(0, when)
-  const detune = 1 + (Math.random() - 0.5) * 0.08 // 핀마다 미세하게 다른 소리
-  const g = gainScale
-  // 감속이 진행될수록 낮은음 → 높은음 (귀에 잘 들리도록 지수로 올린다: 640Hz → 2700Hz)
-  const pitch = 640 * Math.pow(4.2, progress) * detune
-  // 1) 딱 — 날개가 핀을 때리는 아주 짧은 타격 노이즈 (같이 밝아진다)
-  burst(t, 0.012, (0.16 + 0.07 * progress) * g, 3200 + 4200 * progress)
-  // 2) 톡 — 플라스틱 날개의 짧은 울림 (음정 몸통)
-  beep(pitch, 0.024, 'triangle', (0.15 + 0.07 * progress) * g, t)
-  beep(pitch * 1.5, 0.016, 'square', 0.05 * g, t) // 카랑한 배음
-  // 3) 둔탁한 저음 바디 — 판에 전달되는 진동 (위로 갈수록 옅어진다)
-  beep(250 * (1 + progress) * detune, 0.03, 'sine', (0.1 - 0.05 * progress) * g, t)
+  const detune = 1 + (Math.random() - 0.5) * 0.16 // 핀마다 미세하게 다른 음정
+  const g = gainScale * (0.88 + Math.random() * 0.24) // 세기도 한 방씩 다르게
+  // 바로 앞과 같은 결이 연달아 나오지 않게 1~2칸씩 건너뛴다
+  pegVariant = (pegVariant + 1 + (Math.random() < 0.35 ? 1 : 0)) % 3
+  // 감속이 진행될수록 낮은음 → 높은음 (900Hz → 3000Hz).
+  // 자유 회전 중(progress 0)에도 충분히 밝게 — 예전 640Hz는 웅웅거려 단조로웠다.
+  const pitch = 900 * Math.pow(3.33, progress) * detune
+  const bright = 4200 + 4000 * progress // 타격 노이즈도 같이 밝아진다
+
+  if (pegVariant === 0) {
+    // 딱 — 마른 나무를 때리듯 짧고 단단하게
+    burst(t, 0.01, (0.2 + 0.06 * progress) * g, bright)
+    beep(pitch, 0.022, 'triangle', (0.16 + 0.06 * progress) * g, t)
+    beep(pitch * 2.02, 0.012, 'square', 0.05 * g, t) // 카랑한 배음
+  } else if (pegVariant === 1) {
+    // 탁 — 몸통이 좀 더 울리는 플라스틱 날개
+    burst(t, 0.016, (0.15 + 0.06 * progress) * g, bright * 0.62)
+    beep(pitch * 0.76, 0.03, 'triangle', (0.17 + 0.06 * progress) * g, t)
+    beep(pitch * 1.49, 0.018, 'square', 0.042 * g, t)
+  } else {
+    // 따각 — 핀을 넘으며 날개가 한 번 되튀는 두 겹 소리
+    burst(t, 0.008, (0.18 + 0.06 * progress) * g, bright * 1.15)
+    beep(pitch * 1.18, 0.018, 'triangle', (0.13 + 0.05 * progress) * g, t)
+    burst(t + 0.011, 0.007, 0.085 * g, bright * 0.8)
+    beep(pitch * 0.92, 0.014, 'square', 0.04 * g, t + 0.011)
+  }
+
+  // 공통 — 판에 전달되는 둔탁한 저음 진동 (감속할수록 옅어진다)
+  beep(250 * (1 + progress) * detune, 0.03, 'sine', (0.09 - 0.045 * progress) * g, t)
   if (progress > 0.8) {
     // 멈추기 직전엔 저음 심장박동을 한 겹 더
     beep(110 + 50 * progress, 0.07, 'sine', 0.12 * g, t)
@@ -107,7 +131,7 @@ export function tick(progress = 0, when = 0, gainScale = 1): void {
 // ---- 회전 딸깍 스케줄러 ----
 // 예전에는 화면 프레임마다 딸깍을 울렸는데, 메뉴가 100종을 넘어 프레임이 떨어지면
 // 소리까지 뚝뚝 끊겼다. 이제 오디오 시계에 미리 예약해 두어 화면과 무관하게 고르게 난다.
-const TICK_MAX_RATE = 32 // 초당 최대 딸깍 (그 이상은 사람 귀에 뭉개지고 부하만 커진다)
+const TICK_MAX_RATE = 36 // 초당 최대 딸깍 (그 이상은 사람 귀에 뭉개지고 부하만 커진다)
 let tickTimer: ReturnType<typeof setInterval> | null = null
 let tickNext = 0
 
@@ -126,8 +150,8 @@ export function startTicking(rateFn: () => number, progressFn: () => number): vo
         tickNext = a.currentTime + 0.1
         break
       }
-      // 촘촘할수록 한 방씩은 부드럽게 (겹쳐서 뭉개지지 않게)
-      tick(progressFn(), tickNext - a.currentTime, rate > 16 ? 0.62 : 1)
+      // 촘촘할수록 한 방씩은 살짝 부드럽게 (겹쳐서 뭉개지지 않게)
+      tick(progressFn(), tickNext - a.currentTime, rate > 16 ? 0.8 : 1)
       tickNext += 1 / rate
     }
   }, 70)

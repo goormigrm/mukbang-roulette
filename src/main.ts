@@ -1,5 +1,5 @@
 import './styles.css'
-import { store } from './state'
+import { REROLL_PRESETS, store, suggestNextRerollCost } from './state'
 import type { AppliedDonation, MenuItem, Round } from './state'
 import { MIN_SPIN_MS, RouletteWheel, segColor } from './roulette'
 import * as sound from './sound'
@@ -66,6 +66,117 @@ function renderRoundTitle(): void {
   // 룰렛 화면에는 이름이 있을 때만 현판을 띄운다
   elRoundTitleDisplay.textContent = store.title
   elRoundTitleDisplay.hidden = store.title === ""
+}
+
+// ---------- 룰렛 이름 현판 자리 잡기 ----------
+// 룰렛 상자 모서리에 고정해 두면, 이름이 길수록 원판·포인터 위 메뉴명·당첨 도장을 가린다.
+// 그래서 현판은 프레임 오른쪽 위 빈 곳에 붙이고, 이름 길이에 맞춰 글자 크기와 줄 폭을 골라
+// 그 상자가 아무것도 덮지 않는 가장 큰 크기로 앉힌다.
+const elWheelArea = $('.wheel-area')
+const elWheelCanvas = $<HTMLCanvasElement>('#wheel')
+const TITLE_FONT_SIZES = [22, 20, 18, 16, 15, 14, 13]
+const TITLE_GAP = 10 // 원판·메뉴명·도장과 띄울 최소 거리(px)
+const TITLE_MAX_LINES = 3 // 이보다 길게 세로로 쌓이면 읽기 어렵다 — 차라리 글자를 줄인다
+const TITLE_INSET_RIGHT = 16 // CSS right 값과 같게 (위쪽 14px은 CSS에만)
+
+interface Box {
+  l: number
+  t: number
+  r: number
+  b: number
+}
+
+/** 당첨 도장이 떠 있으면 그 자리 — -8° 기울어져 있고 등장할 때 확대 애니메이션이 있으므로,
+ *  지금 보이는 크기가 아니라 다 내려앉은 자리의 바깥 상자로 계산한다 */
+function stampBox(): Box | null {
+  if (elOverlay.hidden || elWinnerStamp.hidden) return null
+  const w = elWinnerStamp.offsetWidth
+  const h = elWinnerStamp.offsetHeight
+  if (!w || !h) return null
+  const ov = elOverlay.getBoundingClientRect()
+  const x = ov.left + elWinnerStamp.offsetLeft + w / 2
+  const y = ov.top + elWinnerStamp.offsetTop + h / 2
+  const a = (8 * Math.PI) / 180
+  const hw = (w / 2) * Math.cos(a) + (h / 2) * Math.sin(a)
+  const hh = (w / 2) * Math.sin(a) + (h / 2) * Math.cos(a)
+  return { l: x - hw, r: x + hw, t: y - hh, b: y + hh }
+}
+
+let lastTitleSig = ''
+
+function placeRoundTitle(): void {
+  const el = elRoundTitleDisplay
+  if (el.hidden) {
+    lastTitleSig = ''
+    return
+  }
+  const area = elWheelArea.getBoundingClientRect()
+  const cv = elWheelCanvas.getBoundingClientRect()
+  if (!cv.width) return
+  const stamp = stampBox()
+  // 이름·화면 크기·도장 자리가 그대로면 다시 계산하지 않는다 (도네가 들어올 때마다 불리므로)
+  const sig = [el.textContent, area.width, area.top, cv.width, cv.left, stamp && Object.values(stamp).map(Math.round)].join('|')
+  if (sig === lastTitleSig) return
+  lastTitleSig = sig
+
+  // roulette.ts draw()와 같은 계산 — 원판 중심·반지름, 포인터 위 메뉴명 자리
+  const size = cv.width
+  const pad = Math.max(58, size * 0.13)
+  const cx = cv.left + size / 2
+  const cy = cv.top + (size + pad) / 2
+  const R = (size - pad) / 2 - 8
+  const rimTop = cv.top + pad + 8
+  const labelFont = Math.max(20, size * 0.05)
+  // 메뉴명은 돌아가는 동안 계속 바뀌므로 가운데 절반 폭을 통째로 비워 둔다
+  const label: Box = { l: cx - size * 0.25, r: cx + size * 0.25, t: rimTop - 30 - labelFont, b: rimTop + 4 }
+
+  const overlaps = (a: Box, o: Box): boolean =>
+    a.l < o.r + TITLE_GAP && a.r > o.l - TITLE_GAP && a.t < o.b + TITLE_GAP && a.b > o.t - TITLE_GAP
+  const hitsWheel = (a: Box): boolean => {
+    const nx = Math.min(Math.max(cx, a.l), a.r)
+    const ny = Math.min(Math.max(cy, a.t), a.b)
+    return Math.hypot(cx - nx, cy - ny) < R + TITLE_GAP
+  }
+
+  // 오른쪽 위 모서리에서 메뉴명 자리 직전까지가 쓸 수 있는 폭
+  const maxW = Math.max(60, area.right - TITLE_INSET_RIGHT - (label.r + TITLE_GAP))
+  const apply = (font: number, width: number): Box => {
+    el.style.fontSize = `${font}px`
+    el.style.padding = `${Math.round(font * 0.32)}px ${Math.round(font * 0.64)}px`
+    el.style.maxWidth = `${Math.floor(width)}px`
+    const b = el.getBoundingClientRect()
+    return { l: b.left, t: b.top, r: b.right, b: b.bottom }
+  }
+  /** 지금 현판이 몇 줄로 접혔는가 (line-height 1.25 기준) */
+  const lineCount = (font: number): number => {
+    const cs = getComputedStyle(el)
+    const inner = el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
+    return Math.round(inner / (font * 1.25))
+  }
+
+  // 도장까지 피해 보고, 그래도 안 맞으면 원판·메뉴명만 피한다
+  const rounds = stamp ? [[label, stamp], [label]] : [[label]]
+  for (const obstacles of rounds) {
+    // 3줄 안에 들어가는 자리가 없을 때를 대비해, 아무것도 덮지 않는 자리 중 줄이 가장 적은 것을 기억해 둔다
+    let fewest: { font: number; width: number; lines: number } | null = null
+    for (const font of TITLE_FONT_SIZES) {
+      // 한 줄로 넓게 → 좁혀서 여러 줄로 (좁히면 왼쪽 아래 모서리가 원판에서 멀어진다)
+      for (const width of [maxW, maxW * 0.72, maxW * 0.5]) {
+        const box = apply(font, width)
+        const clear = box.l >= area.left + TITLE_INSET_RIGHT && !hitsWheel(box) && !obstacles.some((o) => overlaps(box, o))
+        if (!clear) continue
+        const lines = lineCount(font)
+        if (lines <= TITLE_MAX_LINES) return // 가장 큰 글씨로 3줄 안에 들어감
+        if (!fewest || lines < fewest.lines) fewest = { font, width, lines }
+      }
+    }
+    if (fewest) {
+      apply(fewest.font, fewest.width) // 아주 긴 이름 — 덮지 않는 선에서 줄이 가장 적게
+      return
+    }
+  }
+  // 어디에도 깨끗이 안 들어감 — 가장 작은 글씨로 넓게 (원판 쪽으로 내려가지 않게)
+  apply(TITLE_FONT_SIZES[TITLE_FONT_SIZES.length - 1], maxW)
 }
 
 function renderPause(): void {
@@ -246,18 +357,23 @@ function renderStatus(): void {
           : `<div class="muted small-text">${ko('늦게 온 도네를 넣어주고 싶으면 후보 목록에서 직접 추가하세요')}</div>`
       }`
       break
-    case 'spinning':
+    case 'spinning': {
+      // 리롤 접수가 열려 있으면 돌아가는 동안에도 "다음 리롤" 도네를 받는다는 걸 알려 준다
+      const openNote = store.windowOpened
+        ? `<div class="muted small-text">${ko(`🔔 돌아가는 동안에도 ${cost}원 이상 리롤 도네를 받습니다`)}</div>`
+        : ''
       html = wheel.isStopping
-        ? `<div class="big reroll-note">두구두구두구... 🥁</div>`
-        : `<div class="big">${ko('🌀 돌아가는 중 — [🛑 정지!]를 누르면 멈춥니다')}</div>`
+        ? `<div class="big reroll-note">두구두구두구... 🥁</div>${openNote}`
+        : `<div class="big">${ko('🌀 돌아가는 중 — [🛑 정지!]를 누르면 멈춥니다')}</div>${openNote}`
       break
+    }
     case 'decision': {
       const creditNote =
         store.rerollCredits > 0
           ? `<div class="armed-banner">${ko(`🔄 리롤권 ×${store.rerollCredits} 보유 — 마지막 리롤이 최종!`)}</div>`
           : ''
       html = store.windowOpened
-        ? `<div class="big reroll-note">${ko(`⏱ 접수 마감 — 늦게 도착한 ${cost}원 이상 도네도 확정 전까지 인정됩니다`)}</div>${creditNote}`
+        ? `<div class="big reroll-note">${ko(`🔔 리롤 접수 중 — 단일 도네 ${cost}원 이상이면 리롤권 (확정 전까지)`)}</div>${creditNote}${nextRerollNote()}`
         : `<div class="big">${ko('🎉 당첨! 아래 버튼에서 선택하세요')}</div>${creditNote}`
       break
     }
@@ -271,11 +387,22 @@ function renderStatus(): void {
       html = `
         <div class="big reroll-note"><span class="phrase">⏱ <span id="remain-sec">${remain}</span>초 안에</span> ${ko(`단일 도네 ${cost}원 이상이면 리롤권 적립!`)}</div>
         <div class="timer-track"><div class="timer-fill" id="timer-fill" style="width:${pct}%"></div></div>
-        ${creditNote}`
+        ${creditNote}${nextRerollNote()}`
       break
     }
   }
   elStatusBar.innerHTML = html
+}
+
+/** 정해 둔 다음 리롤 금액 — 방송 화면에도 보여 시청자가 미리 준비할 수 있게 */
+function nextRerollNote(): string {
+  if (store.nextRerollCost === null) return ''
+  return `<div class="next-note">${ko(`💰 다음 리롤은 ${store.nextRerollCost.toLocaleString('ko-KR')}원`)}</div>`
+}
+
+/** 버튼에 쓰는 짧은 금액 — 40000 → "4만" */
+function manWon(n: number): string {
+  return n >= 10000 && n % 10000 === 0 ? `${n / 10000}만` : `${n.toLocaleString('ko-KR')}원`
 }
 
 function renderButtons(): void {
@@ -306,7 +433,17 @@ function renderButtons(): void {
     store.rerollCredits > 0 &&
     (store.phase === 'decision' || store.phase === 'window')
   )
-  btnReroll.textContent = store.rerollCredits > 0 ? `🔄 리롤 ×${store.rerollCredits}` : '🔄 리롤'
+  // 마지막 리롤권이면 누른 뒤 무슨 일이 생기는지 버튼에 미리 보여 준다
+  // (다음 금액이 정해져 있으면 그 금액으로 이어서 받고, 아니면 누를 때 묻는다)
+  const lastCredit = store.rerollCredits === 1 && store.windowOpened
+  btnReroll.textContent =
+    store.rerollCredits < 1
+      ? '🔄 리롤'
+      : lastCredit && store.nextRerollCost !== null
+        ? `🔄 리롤 ×1 → 다음 ${manWon(store.nextRerollCost)}`
+        : lastCredit
+          ? '🔄 리롤 ×1 (마지막)'
+          : `🔄 리롤 ×${store.rerollCredits}`
   btnConfirm.hidden = !(store.phase === 'decision' || store.phase === 'window')
 }
 
@@ -509,6 +646,7 @@ function renderAll(): void {
   renderRerollBuyers()
   renderBigTimer()
   renderOverlay()
+  placeRoundTitle() // 도장이 뜨고 지는 것까지 본 뒤에 현판 자리를 잡는다
   if (!wheel.isSpinning) wheel.draw()
 }
 
@@ -557,12 +695,11 @@ btnSpin.addEventListener('click', () => {
 btnCloseEntry.addEventListener('click', () => store.startClosing())
 btnOpenWindow.addEventListener('click', () => {
   // 회차마다 리롤 금액을 올려 받는 운영(2만 → 4만 → 10만)을 위해 접수 시작 시 금액 입력.
+  // 이번 금액과 함께 **다음 금액**도 미리 정해 두면, 마지막 리롤권을 쓰는 순간 그 금액으로 바로 이어서 받는다.
   // 방송 화면에 그대로 찍히므로 브라우저 기본 prompt 대신 가운데 뜨는 우리 창으로 받는다.
   const def = store.effectiveRerollCost()
-  // 회차를 올려 받을 때 한 번에 고르는 금액 (2만 → 3만 → 4만 → 5만 → 10만)
-  const presets = [20000, 30000, 40000, 50000, 100000]
   void modal
-    .askAmount({
+    .askAmounts({
       title: '🔔 리롤 도네 받기',
       // 구 단위로 끊어 넘긴다 — 한 문장이 줄 끝에서 어중간하게 갈리지 않게
       desc: [
@@ -570,19 +707,47 @@ btnOpenWindow.addEventListener('click', () => {
         '이 금액 이상을 한 번에 쏜 사람마다',
         '리롤권이 1개씩 쌓입니다.',
       ],
-      label: '이번 회차 리롤 비용',
-      value: def,
-      min: 1000,
-      presets,
+      fields: [
+        { label: '이번 리롤 금액', value: def, min: 1000, presets: REROLL_PRESETS },
+        {
+          label: '다음 리롤 금액',
+          value: store.nextRerollCost ?? suggestNextRerollCost(def),
+          min: 1000,
+          presets: REROLL_PRESETS,
+          optional: true,
+          hint: '마지막 리롤권을 쓰는 순간 이 금액으로 바로 이어서 받습니다. 비워 두면 그때 정합니다.',
+        },
+      ],
       confirmText: '접수 시작',
       note: ['여러 명이 사면 그만큼 쌓이고,', '마지막 리롤이 최종입니다.', '합산은 인정되지 않습니다.'],
     })
-    .then((cost) => {
-      if (cost === null) return
-      store.startRerollWindow(cost)
+    .then((r) => {
+      if (r === null || r === 'skip') return
+      store.startRerollWindow(r[0] ?? def, r[1])
     })
 })
-btnReroll.addEventListener('click', () => doSpin(true))
+
+/** [🔄 리롤] — 마지막 리롤권인데 다음 금액을 아직 안 정했으면 돌리기 전에 정한다.
+ *  정해 두면 돌아가는 동안·결과가 나온 뒤에 미리 쏜 "다음 리롤" 도네도 바로 인정된다 */
+async function doReroll(): Promise<void> {
+  if (store.rerollCredits < 1) return
+  if (store.rerollCredits === 1 && store.windowOpened && store.nextRerollCost === null) {
+    const cur = store.effectiveRerollCost()
+    const r = await modal.askAmounts({
+      title: '🔄 마지막 리롤권',
+      desc: ['이 리롤을 돌리면 남은 리롤권이 없습니다.', '다음 리롤 금액을 정해 두면', '돌아가는 동안에도 바로 받습니다.'],
+      fields: [{ label: '다음 리롤 금액', value: suggestNextRerollCost(cur), min: 1000, presets: REROLL_PRESETS }],
+      confirmText: '정하고 돌리기',
+      skipText: '다음 없이 돌리기',
+      note: [`지금 리롤 금액은 ${cur.toLocaleString('ko-KR')}원입니다.`, '[다음 없이 돌리기]는 이번 리롤이 마지막입니다.'],
+    })
+    if (r === null) return // 취소 — 돌리지 않는다
+    if (r === 'skip') store.endRerollSales()
+    else store.setNextRerollCost(r[0])
+  }
+  doSpin(true)
+}
+btnReroll.addEventListener('click', () => void doReroll())
 btnConfirm.addEventListener('click', () => {
   store.confirmResult()
   activateTab('history') // 확정 직후 방금 저장된 라운드를 바로 보여준다
@@ -593,6 +758,7 @@ elRoundTitle.addEventListener('input', () => {
   const typed = elRoundTitle.value.trim()
   elRoundTitleDisplay.textContent = typed
   elRoundTitleDisplay.hidden = typed === ''
+  placeRoundTitle()
 })
 elRoundTitle.addEventListener('change', () => store.setTitle(elRoundTitle.value))
 elRoundTitle.addEventListener('blur', () => store.setTitle(elRoundTitle.value))
@@ -876,8 +1042,12 @@ updateAuthButtons()
 if (document.fonts?.ready) {
   void document.fonts.ready.then(() => {
     if (!wheel.isSpinning) wheel.draw()
+    lastTitleSig = '' // 글꼴이 바뀌면 현판 크기도 달라지므로 다시 자리를 잡는다
+    placeRoundTitle()
   })
 }
+// 창 크기가 바뀌면 룰렛 크기도 바뀌므로 현판 자리를 다시 잡는다
+window.addEventListener('resize', () => requestAnimationFrame(placeRoundTitle))
 void (async () => {
   const loggedInNow = await chzzk.handleOAuthRedirect()
   updateAuthButtons()

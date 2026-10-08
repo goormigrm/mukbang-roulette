@@ -143,6 +143,7 @@ body {
 
 /* ---------- 룰렛 영역 ---------- */
 .wheel-area {
+  position: relative; /* 룰렛 이름 현판이 프레임 오른쪽 위 모서리에 붙는다 */
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -1111,12 +1112,15 @@ button {
 
 /* 룰렛 화면에 걸리는 판 이름 현판 */
 .round-title-display {
+  /* 프레임 오른쪽 위 빈 곳에 앉는다. 글자 크기·폭(max-width)·여백은 이름 길이에 맞춰
+     main.ts의 placeRoundTitle()이 원판·포인터 위 메뉴명·당첨 도장을 피하도록 고른다 */
   position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 2;
-  max-width: 52%;
+  top: 14px;
+  right: 16px;
+  z-index: 3;
+  max-width: 200px;
   padding: 7px 14px;
+  text-wrap: balance;
   border: 2px solid var(--ink);
   border-radius: 10px;
   background: var(--cream-dark);
@@ -1327,4 +1331,62 @@ button {
 .winner-donors,
 .toast {
   text-wrap: balance;
+}
+
+/* 금액 칸이 여럿일 때 (이번 리롤 · 다음 리롤) — 칸마다 구분선으로 나눈다 */
+.modal-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-field + .modal-field {
+  padding-top: 12px;
+  border-top: 2px dashed var(--cream-dark);
+}
+
+.modal-hint {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #6b4a12;
+  text-wrap: balance;
+}
+
+/* 상태바의 "다음 리롤 금액" 안내 */
+.status-bar .next-note {
+  color: #6b4a12;
+  font-size: 16px;
+}
+
+/* [✅ 결과 확정] — 판을 끝내는 버튼. 다른 큰 버튼(돌리기·리롤)과 같은 크기·두께·그림자로 맞추고,
+   "끝내기"라는 뜻이 드러나게 앱의 확정·수신 표시와 같은 초록으로 구분한다 */
+.btn-confirm {
+  padding: 12px 26px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: #1d7a3d;
+  color: #eaffe8;
+  font-size: 20px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--ink);
+  transition: transform 0.08s, background 0.12s;
+}
+
+.btn-confirm:hover:not(:disabled) {
+  background: #23904a;
+  transform: translateY(-2px);
+}
+
+.btn-confirm:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--ink);
 }

@@ -92,6 +92,21 @@ export function menuKey(raw: string): string {
   return canonicalMenuName(raw).replace(/\s+/g, '')
 }
 
+// ---- 리롤 금액 ----
+/** 금액 입력 창에 늘 띄워 두는 빠른 선택 버튼 (사용자 지정: 2만 3만 4만 5만 10만) */
+export const REROLL_PRESETS = [20000, 30000, 40000, 50000, 100000]
+
+/** 다음 리롤 금액 추천 — 지금 금액의 두 배 이상인 가장 작은 버튼 값(없으면 두 배).
+ *  운영하던 올려 받기 그대로 2만 → 4만 → 10만이 된다 */
+export function suggestNextRerollCost(current: number): number {
+  return REROLL_PRESETS.find((p) => p >= current * 2) ?? current * 2
+}
+
+/** 1,000원 미만·숫자 아님은 "안 정함"(null)으로 */
+function validCost(cost: number | null | undefined): number | null {
+  return typeof cost === 'number' && Number.isFinite(cost) && cost >= 1000 ? Math.floor(cost) : null
+}
+
 const LS_SETTINGS = 'mr:settings'
 const LS_MENUS = 'mr:menus'
 const LS_HISTORY = 'mr:history'
@@ -110,6 +125,7 @@ interface RoundState {
   rerollUsers: string[]
   rerollCount: number
   currentRerollCost: number | null
+  nextRerollCost?: number | null
   windowOpened: boolean
   confirmedDonors?: string[]
   confirmedChance?: number
@@ -143,7 +159,11 @@ export class Store {
   countdownRemainMs = 0
   /** 이번 회차 리롤 비용 (접수 시작 시 입력, null이면 설정 기본값). 확정 시 초기화 */
   currentRerollCost: number | null = null
-  /** 이번 당첨 결과에 대해 접수를 연 적이 있는지 — 마감 후 늦게 도착한 도네 인정용 */
+  /** 다음 회차 리롤 비용 — 마지막 리롤권을 쓰는 순간 이번 회차 비용이 되어 바로 이어서 받는다.
+   *  null이면 아직 안 정함(마지막 리롤권을 쓸 때 묻는다). 확정 시 초기화 */
+  nextRerollCost: number | null = null
+  /** 이번 판에 리롤 접수를 열었는가 — 한 번 열면 결과 확정 전까지 계속 열려 있다
+   *  (접수 시간이 끝난 뒤·리롤이 돌아가는 동안·리롤 결과가 나온 뒤에도 리롤 도네를 인정) */
   windowOpened = false
   /** 버저비터 마감 시각 (epoch ms) — 0이면 진행 중이 아님. 방송 딜레이 보정용 */
   graceUntil = 0
@@ -240,6 +260,7 @@ export class Store {
     this.rerollUsers = Array.isArray(r.rerollUsers) ? r.rerollUsers.map(String) : []
     this.rerollCount = Math.max(0, Number(r.rerollCount) || 0)
     this.currentRerollCost = typeof r.currentRerollCost === 'number' ? r.currentRerollCost : null
+    this.nextRerollCost = typeof r.nextRerollCost === 'number' ? r.nextRerollCost : null
     this.windowOpened = Boolean(r.windowOpened)
     const deadline = Number(r.countdownDeadline) || 0
     const remain = deadline - Date.now()
@@ -264,6 +285,7 @@ export class Store {
       rerollUsers: this.rerollUsers,
       rerollCount: this.rerollCount,
       currentRerollCost: this.currentRerollCost,
+      nextRerollCost: this.nextRerollCost,
       windowOpened: this.windowOpened,
       title: this.title,
       confirmedDonors: this.confirmedDonors,
@@ -379,6 +401,7 @@ export class Store {
     this.rerollCredits = 0
     this.rerollUsers = []
     this.currentRerollCost = null
+    this.nextRerollCost = null
     this.windowOpened = false
     this.addFeed('info', '🧹 룰렛 초기화 — 후보와 진행 중 라운드를 모두 비웠습니다')
     this.changed()
@@ -413,17 +436,17 @@ export class Store {
 
     // 리롤 판정: 단일 도네 금액 ≥ 이번 회차 리롤 비용 → 리롤권 1개 누적.
     // 타이머는 멈추지 않고 끝까지 흐른다 — 그동안 여러 명의 리롤권이 계속 쌓일 수 있다.
-    // 접수 마감 뒤(decision + windowOpened)에도 확정 전까지 인정 (치지직 연동 지연 대비).
+    // 접수를 한 번 열면 확정 전까지 계속 인정한다(2026-10-08) — 접수 시간이 끝난 뒤(지각분),
+    // 리롤이 돌아가는 동안, 리롤 결과가 나온 뒤에 미리 쏜 "다음 리롤" 도네도 놓치지 않게.
     const rerollEligible =
-      this.phase === 'window' || (this.phase === 'decision' && this.windowOpened)
+      this.phase === 'window' ||
+      ((this.phase === 'decision' || this.phase === 'spinning') && this.windowOpened)
     if (rerollEligible && d.amount >= this.effectiveRerollCost()) {
-      const late = this.phase === 'decision'
+      const when =
+        this.phase === 'spinning' ? ' · 돌아가는 동안 미리 접수' : this.phase === 'decision' ? ' · 확정 전 도착분 인정' : ''
       this.rerollCredits++
       this.rerollUsers.push(d.nick)
-      this.addFeed(
-        'reroll',
-        `🔄 [${d.nick}] ${won}원 — 리롤권 +1 (보유 ${this.rerollCredits}개)${late ? ' · 마감 후 도착분 인정' : ''}`,
-      )
+      this.addFeed('reroll', `🔄 [${d.nick}] ${won}원 — 리롤권 +1 (보유 ${this.rerollCredits}개)${when}`)
       this.emit('armed', d.nick)
       return
     }
@@ -509,6 +532,17 @@ export class Store {
         'reroll',
         `🔄 리롤 사용! (남은 리롤권 ${this.rerollCredits}개) — 직전 당첨 메뉴 포함하여 다시 돌립니다`,
       )
+      // 마지막 리롤권을 썼다 — 이번 회차는 끝. 정해 둔 다음 금액으로 바로 이어서 받는다.
+      // 금액은 이 순간에만 오른다: 같은 회차 안에서는 여러 명이 같은 금액으로 살 수 있고,
+      // 방송 딜레이로 거의 동시에 들어온 도네끼리 값이 갈리는 일도 없다.
+      if (this.rerollCredits === 0 && this.windowOpened && this.nextRerollCost !== null) {
+        this.currentRerollCost = this.nextRerollCost
+        this.nextRerollCost = null
+        this.addFeed(
+          'reroll',
+          `💰 다음 리롤 접수 — 지금부터 단일 도네 ${this.effectiveRerollCost().toLocaleString('ko-KR')}원 이상 (돌아가는 동안에도 인정)`,
+        )
+      }
     } else if (this.phase === 'closing' || this.phase === 'closed') {
       // 모집 마감(또는 카운트다운 중) 상태에서 시작 — 이번 판의 첫 스핀이므로 별도 안내 없이 돈다
       this.stopCountdown()
@@ -544,8 +578,8 @@ export class Store {
   }
 
   /** 스핀 애니메이션 종료 → 당첨 발표.
-   *  리롤 도네 접수는 자동으로 열리지 않고 스트리머가 [리롤 도네 받기]를 눌러야 시작된다.
-   *  남은 리롤권이 있으면 즉시 리롤 가능 상태 유지 */
+   *  첫 결과에서는 리롤 접수가 자동으로 열리지 않는다 — 스트리머가 [리롤 도네 받기]를 눌러야 시작.
+   *  이미 열려 있던 접수는 그대로 이어진다(확정 전까지). 남은 리롤권이 있으면 즉시 리롤 가능 */
   finishSpin(): void {
     if (this.phase !== 'spinning' || !this.pendingWinner) return
     this.winner = this.pendingWinner
@@ -554,7 +588,6 @@ export class Store {
     this.winnerChance = total > 0 ? (this.winner.weight / total) * 100 : 0
     this.addFeed('win', `🎉 당첨: "${this.winner.name}" (확률 ${this.winnerChance.toFixed(2)}%)`)
     this.emit('winner', this.winner)
-    this.windowOpened = false // 새 결과 — 접수 이력 초기화 (리롤 비용·잔여 리롤권은 확정 전까지 유지)
     this.phase = 'decision'
     this.changed()
   }
@@ -564,21 +597,43 @@ export class Store {
     return this.currentRerollCost ?? this.settings.rerollCost
   }
 
-  /** [리롤 도네 받기] — 스트리머가 원하는 타이밍에, 이번 회차 금액을 정해 접수를 시작.
-   *  (예: 1차 2만원 → 2차 4만원 → 3차 10만원처럼 회차마다 올려 받는 운영) */
-  startRerollWindow(cost?: number): void {
+  /** [리롤 도네 받기] — 스트리머가 원하는 타이밍에, 이번 회차 금액(과 다음 회차 금액)을 정해 접수를 시작.
+   *  (예: 1차 2만원 → 2차 4만원 → 3차 10만원처럼 회차마다 올려 받는 운영)
+   *  next: 다음 회차 금액. null이면 "마지막 리롤권을 쓸 때 정하기", 생략하면 기존 값 유지 */
+  startRerollWindow(cost?: number, next?: number | null): void {
     if (this.phase !== 'decision') return
     const sec = this.settings.rerollWindowSec
     if (cost !== undefined && Number.isFinite(cost) && cost >= 1000) {
       this.currentRerollCost = Math.floor(cost)
     }
+    if (next !== undefined) this.nextRerollCost = validCost(next)
     this.phase = 'window'
     this.windowOpened = true
+    const nextNote = this.nextRerollCost ? ` · 다음 리롤 ${this.nextRerollCost.toLocaleString('ko-KR')}원` : ''
     this.addFeed(
       'reroll',
-      `🔔 리롤 도네 접수 시작! ${this.settings.rerollWindowSec}초 안에 단일 도네 ${this.effectiveRerollCost().toLocaleString('ko-KR')}원 이상`,
+      `🔔 리롤 도네 접수 시작! ${this.settings.rerollWindowSec}초 안에 단일 도네 ${this.effectiveRerollCost().toLocaleString('ko-KR')}원 이상${nextNote}`,
     )
     this.startCountdown(Date.now() + sec * 1000, sec * 1000)
+    this.changed()
+  }
+
+  /** 다음 회차 리롤 금액 정하기 (마지막 리롤권을 쓰기 직전에 묻는 창에서) */
+  setNextRerollCost(cost: number | null): void {
+    this.nextRerollCost = validCost(cost)
+    if (this.nextRerollCost) {
+      this.addFeed('reroll', `💰 다음 리롤 금액: ${this.nextRerollCost.toLocaleString('ko-KR')}원`)
+    }
+    this.changed()
+  }
+
+  /** 마지막 리롤권을 "다음 없이" 쓸 때 — 이번 리롤이 마지막, 이후 도네로는 리롤권이 생기지 않는다.
+   *  마음이 바뀌면 결과가 나온 뒤 [리롤 도네 받기]로 다시 열 수 있다 */
+  endRerollSales(): void {
+    if (!this.windowOpened) return
+    this.windowOpened = false
+    this.nextRerollCost = null
+    this.addFeed('info', '🔒 리롤 접수 종료 — 이번 리롤이 마지막입니다')
     this.changed()
   }
 
@@ -599,10 +654,10 @@ export class Store {
         this.phase = 'closed'
         this.startGrace()
       } else {
-        // 리롤 접수는 마감돼도 자동 확정하지 않는다 — 연동 지연으로 늦게 도착하는 도네를
-        // 확정 전까지 인정하고, 스트리머가 재접수/확정을 선택한다
+        // 리롤 접수는 시간이 끝나도 자동 확정하지 않는다 — 연동 지연으로 늦게 도착하는 도네를
+        // 확정 전까지 인정하고, 스트리머가 리롤/재접수/확정을 선택한다
         this.phase = 'decision'
-        this.addFeed('info', '⏱ 리롤 접수 마감 — 늦게 도착한 리롤 도네도 확정 전까지 인정됩니다')
+        this.addFeed('info', '⏱ 리롤 접수 시간 끝 — 확정 전까지는 리롤 도네를 계속 인정합니다')
       }
       this.changed()
     }, 200)
@@ -708,6 +763,7 @@ export class Store {
     this.rerollCredits = 0
     this.rerollUsers = []
     this.currentRerollCost = null
+    this.nextRerollCost = null
     this.windowOpened = false
     this.countdownRemainMs = 0
     this.emit('confirmed', winnerName)

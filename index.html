@@ -41,8 +41,9 @@
 
     <main class="layout">
       <section class="wheel-area frame">
+        <!-- 룰렛 이름 현판 — 프레임 오른쪽 위 빈 곳에 앉고, 길이에 맞춰 크기·줄 수를 main.ts가 고른다 -->
+        <div id="round-title-display" class="round-title-display" hidden></div>
         <div class="wheel-wrap">
-          <div id="round-title-display" class="round-title-display" hidden></div>
           <canvas id="wheel"></canvas>
           <div id="winner-overlay" class="winner-overlay" hidden>
             <div class="stamp" id="winner-stamp">
@@ -62,7 +63,7 @@
           <button id="btn-close-entry" class="btn-reroll">⏱ 30초 후 마감</button>
           <button id="btn-open-window" class="btn-reroll" hidden>🔔 리롤 도네 받기</button>
           <button id="btn-reroll" class="btn-reroll" disabled>🔄 리롤</button>
-          <button id="btn-confirm" class="btn-ghost" hidden>✅ 결과 확정</button>
+          <button id="btn-confirm" class="btn-confirm" hidden>✅ 결과 확정</button>
         </div>
         <p class="hint shortcut-hint">단축키: <b>Space</b> 돌리기·정지·다시 돌리기 · <b>R</b> 리롤 · <b>Enter</b> 결과 확정</p>
       </section>
@@ -155,23 +156,13 @@
         <h3 id="modal-title" class="modal-title"></h3>
         <p id="modal-desc" class="modal-desc"></p>
         <form id="modal-form" class="modal-form">
-          <label id="modal-label" class="modal-label" for="modal-input"></label>
-          <div class="modal-input-row">
-            <input
-              id="modal-input"
-              class="modal-input"
-              type="text"
-              inputmode="numeric"
-              autocomplete="off"
-              spellcheck="false"
-            />
-            <span class="modal-unit">원</span>
-          </div>
-          <div id="modal-presets" class="modal-presets"></div>
+          <!-- 금액 칸(라벨·입력·빠른 선택 버튼)은 열 때마다 modal.ts가 채운다 -->
+          <div id="modal-fields" class="modal-fields"></div>
           <p id="modal-error" class="modal-error" hidden></p>
           <p id="modal-note" class="modal-note"></p>
           <div class="modal-actions">
             <button type="button" id="modal-cancel" class="btn-ghost">취소</button>
+            <button type="button" id="modal-skip" class="btn-ghost" hidden></button>
             <button type="submit" id="modal-ok" class="btn-primary small">확인</button>
           </div>
         </form>

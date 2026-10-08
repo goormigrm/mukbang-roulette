@@ -30,6 +30,8 @@ export interface AmountField {
   presets?: number[]
   /** 비워 둘 수 있는 칸 — 비우면 결과가 null */
   optional?: boolean
+  /** 비워 두기를 버튼으로도 고를 수 있게 — 빠른 선택 버튼 끝에 붙는다 (예: "나중 선택") */
+  laterText?: string
   /** 칸 아래 작은 안내 */
   hint?: string
 }
@@ -133,19 +135,23 @@ function buildField(f: AmountField, i: number): HTMLInputElement {
   input.autocomplete = 'off'
   input.spellcheck = false
   input.value = f.value === null ? '' : String(f.value)
-  if (f.optional) input.placeholder = '비워 두기'
+  if (f.optional) input.placeholder = f.laterText ?? '비워 두기'
   const unit = document.createElement('span')
   unit.className = 'modal-unit'
   unit.textContent = '원'
   row.append(input, unit)
   wrap.append(label, row)
 
-  // 지금 칸에 들어 있는 금액과 같은 버튼을 켜 둔다 (직접 고쳐 적어도 따라간다)
+  // 지금 칸에 들어 있는 금액과 같은 버튼을 켜 둔다 (직접 고쳐 적어도 따라간다).
+  // "나중 선택" 버튼은 칸이 비어 있을 때 켜진다
   const presets = document.createElement('div')
   presets.className = 'modal-presets'
   const mark = (): void => {
     const v = parseAmount(input.value)
-    for (const b of presets.children) b.classList.toggle('on', Number((b as HTMLElement).dataset.v) === v)
+    for (const b of presets.children) {
+      const el = b as HTMLElement
+      el.classList.toggle('on', el.dataset.later === '1' ? input.value.trim() === '' : Number(el.dataset.v) === v)
+    }
   }
   for (const p of f.presets ?? []) {
     const b = document.createElement('button')
@@ -161,6 +167,19 @@ function buildField(f: AmountField, i: number): HTMLInputElement {
       input.focus()
     })
     presets.appendChild(b)
+  }
+  if (f.optional && f.laterText) {
+    const later = document.createElement('button')
+    later.type = 'button'
+    later.className = 'modal-preset later'
+    later.textContent = f.laterText
+    later.dataset.later = '1'
+    later.addEventListener('click', () => {
+      input.value = ''
+      elError.hidden = true
+      mark()
+    })
+    presets.appendChild(later)
   }
   if (presets.children.length > 0) wrap.appendChild(presets)
   input.addEventListener('input', () => {

@@ -715,7 +715,9 @@ btnOpenWindow.addEventListener('click', () => {
           min: 1000,
           presets: REROLL_PRESETS,
           optional: true,
-          hint: '마지막 리롤권을 쓰는 순간 이 금액으로 바로 이어서 받습니다. 비워 두면 그때 정합니다.',
+          // 리롤해 보고 정하고 싶을 수도 있다 — [나중 선택]이면 마지막 리롤권을 누를 때 묻는다
+          laterText: '나중 선택',
+          hint: '마지막 리롤권을 쓰는 순간 이 금액으로 바로 이어서 받습니다. [나중 선택]은 그때 묻습니다.',
         },
       ],
       confirmText: '접수 시작',

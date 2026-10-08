@@ -1390,3 +1390,16 @@ button {
   transform: translateY(2px);
   box-shadow: 0 2px 0 var(--ink);
 }
+
+/* [나중 선택] — 금액 버튼과 구분되게 점선, 고르면 다른 버튼처럼 빨갛게 */
+.modal-preset.later {
+  border-style: dashed;
+  background: #fff;
+  color: #6b4a12;
+}
+
+.modal-preset.later.on {
+  border-style: solid;
+  background: var(--red-deep);
+  color: #fff;
+}

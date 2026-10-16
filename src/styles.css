@@ -1066,7 +1066,6 @@ button {
   border-color: #fff;
 }
 
-/* 이번 판의 이름 — 룰렛 오른쪽 위 (눌러서 바로 고칠 수 있다) */
 /* 후보 카드 헤더 — 제목 왼쪽, 판 이름 입력 오른쪽 */
 .card-head {
   display: flex;

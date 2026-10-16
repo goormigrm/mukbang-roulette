@@ -167,6 +167,9 @@ export class Store {
   windowOpened = false
   /** 버저비터 마감 시각 (epoch ms) — 0이면 진행 중이 아님. 방송 딜레이 보정용 */
   graceUntil = 0
+  /** 금액을 올리기 직전의 리롤 비용과, 그 금액을 더 받아주는 마감 시각 (epoch ms) */
+  private prevRerollCost = 0
+  private prevRerollUntil = 0
 
   private pendingWinner: MenuItem | null = null
   private seen = new Set<string>()
@@ -355,11 +358,11 @@ export class Store {
     return this.menus.find((m) => menuKey(m.name) === key)
   }
 
-  /** 메뉴 칸 더하기 — 이미 있는 메뉴면 그 항목에 합쳐지고, 반영된 이름을 돌려준다 */
-  addMenu(name: string, weight: number, donor?: string): string | null {
+  /** 메뉴 칸 더하기 — 이미 있는 메뉴면 그 항목에 합쳐진다 */
+  addMenu(name: string, weight: number, donor?: string): void {
     // 40자 컷은 룰렛 라벨·목록 표시가 깨지지 않게 하는 최소한의 안전장치
     name = canonicalMenuName(name).slice(0, 40).trim()
-    if (!name || weight < 1) return null
+    if (!name || weight < 1) return
     const existing = this.findMenu(name)
     if (existing) {
       existing.weight += weight
@@ -372,7 +375,6 @@ export class Store {
       this.menus.push({ id: this.nextMenuId++, name, weight, donors: donor ? [donor] : [] })
     }
     this.changed()
-    return existing ? existing.name : name
   }
 
   removeMenu(id: number): void {
@@ -441,12 +443,13 @@ export class Store {
     const rerollEligible =
       this.phase === 'window' ||
       ((this.phase === 'decision' || this.phase === 'spinning') && this.windowOpened)
-    if (rerollEligible && d.amount >= this.effectiveRerollCost()) {
+    if (rerollEligible && d.amount >= this.acceptedRerollCost()) {
       const when =
         this.phase === 'spinning' ? ' · 돌아가는 동안 미리 접수' : this.phase === 'decision' ? ' · 확정 전 도착분 인정' : ''
+      const old = d.amount < this.effectiveRerollCost() ? ' · 올리기 직전 금액으로 도착, 인정' : ''
       this.rerollCredits++
       this.rerollUsers.push(d.nick)
-      this.addFeed('reroll', `🔄 [${d.nick}] ${won}원 — 리롤권 +1 (보유 ${this.rerollCredits}개)${when}`)
+      this.addFeed('reroll', `🔄 [${d.nick}] ${won}원 — 리롤권 +1 (보유 ${this.rerollCredits}개)${when}${old}`)
       this.emit('armed', d.nick)
       return
     }
@@ -536,6 +539,9 @@ export class Store {
       // 금액은 이 순간에만 오른다: 같은 회차 안에서는 여러 명이 같은 금액으로 살 수 있고,
       // 방송 딜레이로 거의 동시에 들어온 도네끼리 값이 갈리는 일도 없다.
       if (this.rerollCredits === 0 && this.windowOpened && this.nextRerollCost !== null) {
+        // 올리기 직전 금액은 방송 딜레이만큼 더 받아준다 (날아오던 도네가 거절되지 않게)
+        this.prevRerollCost = this.effectiveRerollCost()
+        this.prevRerollUntil = Date.now() + this.settings.graceSec * 1000
         this.currentRerollCost = this.nextRerollCost
         this.nextRerollCost = null
         this.addFeed(
@@ -592,9 +598,17 @@ export class Store {
     this.changed()
   }
 
-  /** 이번 회차에 적용되는 리롤 비용 */
+  /** 이번 회차에 적용되는 리롤 비용 — 화면과 안내에 쓰는 "지금 금액" */
   effectiveRerollCost(): number {
     return this.currentRerollCost ?? this.settings.rerollCost
+  }
+
+  /** 리롤권으로 실제 인정하는 최소 금액.
+   *  금액을 막 올렸다면 방송 딜레이만큼(기본 5초) 직전 금액까지 받아준다 —
+   *  시청자 화면에 아직 옛 금액이 떠 있을 때 쏜 도네가 거절되지 않게(모집 마감 버저비터와 같은 이유) */
+  acceptedRerollCost(): number {
+    const cost = this.effectiveRerollCost()
+    return Date.now() < this.prevRerollUntil ? Math.min(cost, this.prevRerollCost) : cost
   }
 
   /** [리롤 도네 받기] — 스트리머가 원하는 타이밍에, 이번 회차 금액(과 다음 회차 금액)을 정해 접수를 시작.

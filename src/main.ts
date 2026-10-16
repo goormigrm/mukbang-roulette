@@ -59,13 +59,14 @@ const elRoundTitle = $<HTMLInputElement>('#round-title')
 const elRoundTitleDisplay = $('#round-title-display')
 
 function renderRoundTitle(): void {
-  // 입력 중에는 건드리지 않는다 (커서가 튀지 않게)
-  if (document.activeElement !== elRoundTitle && elRoundTitle.value !== store.title) {
-    elRoundTitle.value = store.title
-  }
+  // 적는 중에는 입력칸을 건드리지 않고(커서가 튀지 않게), 현판은 적고 있는 이름을 그대로 따라간다
+  // — 도네가 들어와 화면이 다시 그려져도 현판이 저장된 옛 이름으로 되돌아가지 않게.
+  const typing = document.activeElement === elRoundTitle
+  if (!typing && elRoundTitle.value !== store.title) elRoundTitle.value = store.title
   // 룰렛 화면에는 이름이 있을 때만 현판을 띄운다
-  elRoundTitleDisplay.textContent = store.title
-  elRoundTitleDisplay.hidden = store.title === ""
+  const shown = typing ? elRoundTitle.value.trim() : store.title
+  elRoundTitleDisplay.textContent = shown
+  elRoundTitleDisplay.hidden = shown === ''
 }
 
 // ---------- 룰렛 이름 현판 자리 잡기 ----------
@@ -755,14 +756,11 @@ btnConfirm.addEventListener('click', () => {
   activateTab('history') // 확정 직후 방금 저장된 라운드를 바로 보여준다
 })
 btnPause.addEventListener('click', () => store.togglePaused())
-// 타이핑 중에는 룰렛 현판만 미리 보여주고, 저장은 입력을 마칠 때 한 번만 한다
+// 타이핑 중에는 룰렛 현판만 미리 보여주고, 저장은 입력을 마칠 때(blur) 한 번만 한다
 elRoundTitle.addEventListener('input', () => {
-  const typed = elRoundTitle.value.trim()
-  elRoundTitleDisplay.textContent = typed
-  elRoundTitleDisplay.hidden = typed === ''
+  renderRoundTitle()
   placeRoundTitle()
 })
-elRoundTitle.addEventListener('change', () => store.setTitle(elRoundTitle.value))
 elRoundTitle.addEventListener('blur', () => store.setTitle(elRoundTitle.value))
 elRoundTitle.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') elRoundTitle.blur()

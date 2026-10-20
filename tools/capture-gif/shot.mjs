@@ -90,12 +90,14 @@ await page.waitForTimeout(4000) // 폭죽·색종이가 걷힐 때까지 (허공
 // ---- 1) 당첨 발표 — 룰렛 이름 현판 + 당첨 도장 ----
 await shoot('patch-2026-10-17-round-title')
 
-// ---- 2) 리롤 접수 중 — 이번 2만 / 다음 4만, 리롤권 1개 ----
-// 리롤권이 1개일 때 버튼이 "🔄 리롤 ×1 → 다음 4만"으로 바뀐다 (이 글의 핵심 화면)
+// ---- 2) [🔔 리롤 도네 받기] 창 — 이번 금액과 **다음 금액**을 같이 정하는 화면 ----
+await page.evaluate(() => document.querySelector('#btn-open-window').click())
+await page.waitForSelector('#modal-backdrop:not([hidden])')
+await page.waitForTimeout(300) // 첫 칸에 포커스가 가는 것(rAF)까지 기다린다
+// 첫 칸이 전체 선택된 채로 찍히면 파란 블록이 눈에 거슬린다 — 포커스는 두고 선택만 푼다
 await page.evaluate(() => {
-  const s = window.__store
-  s.startRerollWindow(20000, 40000)
-  s.handleDonation({ id: 'shot-1', nick: '면치기장인', amount: 20000, message: '', isVideo: false })
+  const i = document.querySelector('#modal-input-0')
+  i?.setSelectionRange(i.value.length, i.value.length)
 })
 await shoot('patch-2026-10-17-reroll-next')
 

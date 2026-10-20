@@ -28,7 +28,7 @@ node shot.mjs          # 기본 http://localhost:5173/mukbang-roulette/
 ```
 
 `docs/patch-<날짜>-round-title.png`(당첨 발표 + 룰렛 이름 현판)과
-`docs/patch-<날짜>-reroll-next.png`(리롤 접수 중 + 다음 리롤 금액) 두 장을 찍는다.
+`docs/patch-<날짜>-reroll-next.png`([리롤 도네 받기] 창 — 이번 금액 + 다음 금액) 두 장을 찍는다.
 
 - **배포본이 아니라 개발 서버**를 쓴다 — 상태를 만들려면 `window.__store`(dev 전용)가 필요하다.
 - 추첨만 끼워 넣으면 포인터가 가리키는 칸과 당첨 메뉴가 어긋나 찍힌다(조작처럼 보인다).

@@ -214,10 +214,11 @@ export function askAmounts(opts: AmountDialogOptions): Promise<AmountDialogResul
 
   lastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
   backdrop.hidden = false
-  // 바로 다른 금액을 타이핑할 수 있게 첫 칸을 전체 선택해둔다
+  // 바로 다른 금액을 타이핑할 수 있게 첫 칸을 전체 선택해둔다 (칸이 없는 확인 창은 Enter로 [확인])
   requestAnimationFrame(() => {
-    inputs[0]?.focus()
-    inputs[0]?.select()
+    if (!inputs[0]) return btnOk.focus()
+    inputs[0].focus()
+    inputs[0].select()
   })
 
   return new Promise<AmountDialogResult>((resolve) => {

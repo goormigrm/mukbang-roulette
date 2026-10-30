@@ -1402,3 +1402,27 @@ button {
   background: var(--red-deep);
   color: #fff;
 }
+
+/* [↩ 메뉴 추가로 돌아가기] — 다른 큰 버튼과 같은 크기·그림자, 판을 되돌리는 보조 동작이라 크림색 */
+.btn-back {
+  padding: 12px 26px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--cream);
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--ink);
+  transition: transform 0.08s, background 0.12s;
+}
+
+.btn-back:hover {
+  background: var(--cream-dark);
+  transform: translateY(-2px);
+}
+
+.btn-back:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--ink);
+}

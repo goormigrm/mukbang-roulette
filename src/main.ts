@@ -49,6 +49,7 @@ const btnSpin = $<HTMLButtonElement>('#btn-spin')
 const btnOpenWindow = $<HTMLButtonElement>('#btn-open-window')
 const btnReroll = $<HTMLButtonElement>('#btn-reroll')
 const btnConfirm = $<HTMLButtonElement>('#btn-confirm')
+const btnBack = $<HTMLButtonElement>('#btn-back')
 const btnPause = $<HTMLButtonElement>('#btn-pause')
 const btnCloseEntry = $<HTMLButtonElement>('#btn-close-entry')
 const elWinnerStamp = $('#winner-stamp')
@@ -446,6 +447,7 @@ function renderButtons(): void {
           ? '🔄 리롤 ×1 (마지막)'
           : `🔄 리롤 ×${store.rerollCredits}`
   btnConfirm.hidden = !(store.phase === 'decision' || store.phase === 'window')
+  btnBack.hidden = btnConfirm.hidden
 }
 
 let lastBuyerSig = ''
@@ -754,6 +756,20 @@ btnReroll.addEventListener('click', () => void doReroll())
 btnConfirm.addEventListener('click', () => {
   store.confirmResult()
   activateTab('history') // 확정 직후 방금 저장된 라운드를 바로 보여준다
+})
+btnBack.addEventListener('click', async () => {
+  // 시청자가 돈 내고 산 리롤권이 남아 있으면 사라지므로 한 번 묻는다 (없으면 바로 돌아간다)
+  if (store.rerollCredits > 0) {
+    const ok = await modal.askAmounts({
+      title: '↩ 메뉴 추가로 돌아가기',
+      desc: ['이번 결과는 기록하지 않습니다.', `남은 리롤권 ${store.rerollCredits}개는 사라집니다.`],
+      fields: [],
+      confirmText: '돌아가기',
+    })
+    if (ok === null) return
+  }
+  store.backToCollect()
+  activateTab('current') // 들어오는 메뉴를 바로 볼 수 있게
 })
 btnPause.addEventListener('click', () => store.togglePaused())
 // 타이핑 중에는 룰렛 현판만 미리 보여주고, 저장은 입력을 마칠 때(blur) 한 번만 한다

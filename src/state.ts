@@ -784,6 +784,25 @@ export class Store {
     this.changed()
   }
 
+  /** [↩ 메뉴 추가로 돌아가기] — 이번 결과는 기록하지 않고 모집 중으로 돌아간다.
+   *  메뉴·칸 수는 그대로 두고, 당첨·리롤권·리롤 접수만 확정 때처럼 비운다 */
+  backToCollect(): void {
+    if (this.phase !== 'decision' && this.phase !== 'window') return
+    this.stopCountdown()
+    if (this.rerollCredits > 0) this.addFeed('info', `남은 리롤권 ${this.rerollCredits}개는 소멸됩니다`)
+    this.addFeed('info', '↩ 메뉴 추가로 돌아감 — 이번 결과는 기록하지 않고, 지금부터 도네를 다시 메뉴로 받습니다')
+    this.phase = 'collect'
+    this.winner = null
+    this.rerollCount = 0
+    this.rerollCredits = 0
+    this.rerollUsers = []
+    this.currentRerollCost = null
+    this.nextRerollCost = null
+    this.windowOpened = false
+    this.countdownRemainMs = 0
+    this.changed()
+  }
+
   // ---- 메뉴 목록 내보내기 / 불러오기 ----
   exportMenusJson(): string {
     return JSON.stringify(

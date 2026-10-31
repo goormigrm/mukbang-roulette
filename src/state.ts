@@ -162,6 +162,8 @@ export class Store {
   confirmedChance = 0
   /** 사용 가능한 리롤권 수 (단일 도네 ≥ 리롤비용 1건당 1개 누적) */
   rerollCredits = 0
+  /** 지금 갖고 있는 리롤권을 산 사람 (산 순서, 리롤권 하나에 한 명) — 리롤권을 쓰면 먼저 산 사람부터 빠진다.
+   *  그래서 화면의 "리롤권 ×N 획득! 이름…"에서 이름 수가 늘 N과 같다 */
   rerollUsers: string[] = []
   rerollCount = 0
   countdownRemainMs = 0
@@ -271,7 +273,9 @@ export class Store {
     this.winner = this.menus.find((x) => x.id === r.winner!.id) ?? r.winner
     this.confirmedWinner = r.confirmedWinner ?? null
     this.rerollCredits = Math.max(0, Number(r.rerollCredits) || 0)
+    // 예전 저장값은 판 전체 구매자가 쌓여 있었다 — 남은 리롤권 수만큼 최근 것만 남긴다
     this.rerollUsers = Array.isArray(r.rerollUsers) ? r.rerollUsers.map(String) : []
+    this.rerollUsers = this.rerollUsers.slice(this.rerollUsers.length - this.rerollCredits)
     this.rerollCount = Math.max(0, Number(r.rerollCount) || 0)
     this.currentRerollCost = typeof r.currentRerollCost === 'number' ? r.currentRerollCost : null
     this.nextRerollCost = typeof r.nextRerollCost === 'number' ? r.nextRerollCost : null
@@ -615,6 +619,7 @@ export class Store {
       }
       this.stopCountdown()
       this.rerollCredits--
+      this.rerollUsers.shift() // 쓴 리롤권을 산 사람은 감사 목록에서 빠진다 (재접수 때 지난 회차 이름이 남지 않게)
       this.rerollCount++
       this.addFeed(
         'reroll',

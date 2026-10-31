@@ -377,6 +377,42 @@ describe('리롤', () => {
     expect(s.rerollCredits).toBe(3)
     expect(s.rerollUsers).toEqual(['A', 'B', 'C'])
   })
+  it('감사 카드 이름 = 지금 가진 리롤권 — 쓴 리롤권의 구매자는 빠진다 (재접수 뒤 "테스터 ×2" 버그)', () => {
+    // 화면 그대로: 2만 접수 → 테스터 구매 → 리롤 사용(3만으로) → 재접수(3만) → 테스터 또 구매
+    s.startRerollWindow(20000, 30000)
+    don('테스터', 30000)
+    expect(s.rerollUsers).toEqual(['테스터'])
+    spinTo(1, true)
+    expect(s.rerollCredits).toBe(0)
+    expect(s.rerollUsers).toEqual([])
+    s.startRerollWindow(30000, 40000)
+    don('테스터', 30000)
+    expect(s.rerollCredits).toBe(1)
+    expect(s.rerollUsers).toEqual(['테스터']) // 예전엔 ['테스터', '테스터'] → "리롤권 ×1 획득! 테스터 ×2"
+  })
+  it('여러 명이 산 뒤 하나를 쓰면 먼저 산 사람부터 빠지고, 남은 리롤권은 재접수해도 이름이 남는다', () => {
+    s.startRerollWindow(20000)
+    don('A', 20000)
+    don('B', 20000)
+    don('C', 20000)
+    spinTo(0, true)
+    expect(s.rerollUsers).toEqual(['B', 'C'])
+    expect(s.rerollUsers).toHaveLength(s.rerollCredits)
+    s.startRerollWindow(40000) // 재접수 — 아직 안 쓴 B·C 리롤권은 그대로
+    don('D', 40000)
+    expect(s.rerollUsers).toEqual(['B', 'C', 'D'])
+    expect(s.rerollUsers).toHaveLength(s.rerollCredits)
+  })
+  it('예전 저장값(판 전체 구매자)을 불러와도 남은 리롤권 수만큼만 남긴다', () => {
+    s.startRerollWindow(20000)
+    don('테스터', 20000)
+    const saved = JSON.parse(localStorage.getItem('mr:round')!)
+    saved.rerollUsers = ['예전사람', '테스터'] // 고치기 전 버전이 남긴 모양
+    localStorage.setItem('mr:round', JSON.stringify(saved))
+    const t = new Store()
+    expect(t.rerollCredits).toBe(1)
+    expect(t.rerollUsers).toEqual(['테스터'])
+  })
   it('접수 시간이 끝나도 확정 전까지는 리롤 도네를 인정 (자동 확정 없음)', () => {
     s.startRerollWindow(20000)
     vi.advanceTimersByTime(60_000 + 250)

@@ -436,11 +436,6 @@ function nextRerollNote(): string {
   return `<div class="next-note">${ko(`💰 다음 리롤은 ${store.nextRerollCost.toLocaleString('ko-KR')}원`)}</div>`
 }
 
-/** 버튼에 쓰는 짧은 금액 — 40000 → "4만" */
-function manWon(n: number): string {
-  return n >= 10000 && n % 10000 === 0 ? `${n / 10000}만` : `${n.toLocaleString('ko-KR')}원`
-}
-
 function renderButtons(): void {
   if (store.phase === 'spinning') {
     btnSpin.textContent = wheel.isStopping ? '두구두구...' : '🛑 정지!'
@@ -469,17 +464,11 @@ function renderButtons(): void {
     store.rerollCredits > 0 &&
     (store.phase === 'decision' || store.phase === 'window')
   )
-  // 마지막 리롤권이면 누른 뒤 무슨 일이 생기는지 버튼에 미리 보여 준다
-  // (다음 금액이 정해져 있으면 그 금액으로 이어서 받고, 아니면 누를 때 묻는다)
-  const lastCredit = store.rerollCredits === 1 && store.windowOpened
+  // 다음 금액을 안 정한 마지막 리롤권이면 누를 때 묻는다는 걸 미리 알린다.
+  // 정해 둔 다음 금액은 버튼에 쓰지 않는다 — 상태바에 크게 나온다
+  const askOnClick = store.rerollCredits === 1 && store.windowOpened && store.nextRerollCost === null
   btnReroll.textContent =
-    store.rerollCredits < 1
-      ? '🔄 리롤'
-      : lastCredit && store.nextRerollCost !== null
-        ? `🔄 리롤 ×1 → 다음 ${manWon(store.nextRerollCost)}`
-        : lastCredit
-          ? '🔄 리롤 ×1 (마지막)'
-          : `🔄 리롤 ×${store.rerollCredits}`
+    store.rerollCredits < 1 ? '🔄 리롤' : askOnClick ? '🔄 리롤 ×1 (마지막)' : `🔄 리롤 ×${store.rerollCredits}`
   btnConfirm.hidden = !(store.phase === 'decision' || store.phase === 'window')
   btnBack.hidden = btnConfirm.hidden
 }

@@ -518,8 +518,9 @@ button {
   flex-shrink: 0;
 }
 
+/* 이름은 글자만큼만 차지하고(볼펜이 이름 바로 옆에 붙게), 남는 폭은 추천자 칸이 밀어낸다 */
 .menu-item .name {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -527,7 +528,32 @@ button {
   font-weight: 700;
 }
 
+.menu-item .icon-btn.edit {
+  flex-shrink: 0;
+  border-color: transparent;
+  background: transparent;
+  opacity: 0.55;
+}
+
+.menu-item .icon-btn.edit:hover:not(:disabled) {
+  border-color: var(--ink);
+  background: var(--cream);
+  opacity: 1;
+}
+
+.menu-item .name-edit {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 8px;
+  border: 2px solid var(--red-deep);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 700;
+}
+
 .menu-item .donors {
+  margin-left: auto;
   font-size: 11px;
   color: var(--muted);
   max-width: 110px;
@@ -1066,41 +1092,58 @@ button {
   border-color: #fff;
 }
 
-/* 후보 카드 헤더 — 제목 왼쪽, 판 이름 입력 오른쪽 */
+/* 후보 카드 헤더 — 제목 줄 아래에 판 이름 입력 줄 (제목 옆에 붙여 두면 눈에 안 띄었다) */
 .card-head {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
   margin-bottom: 10px;
 }
 
 .card-head h2 {
   margin: 0;
+}
+
+.round-title-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.round-title-label {
   flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 900;
+  color: #6b4a12;
 }
 
 .round-title {
   flex: 1;
   min-width: 0;
-  padding: 6px 10px;
-  border: 2px solid var(--cream-dark);
+  padding: 8px 12px;
+  border: 2px solid var(--gold);
   border-radius: 8px;
   background: var(--cream);
   color: var(--red-deep);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 900;
+}
+
+/* 아직 안 적었으면 옅은 금색으로 칠해 "여기 적는 곳"이 보이게 */
+.round-title:placeholder-shown {
+  background: #fff4d6;
 }
 
 .round-title::placeholder {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   opacity: 0.85;
 }
 
 .round-title:hover {
-  border-color: var(--gold);
+  border-color: var(--red-deep);
 }
 
 .round-title:focus {

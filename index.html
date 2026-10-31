@@ -80,13 +80,16 @@
           <div class="card frame">
             <div class="card-head">
               <h2>오늘의 후보 <span id="total-slots" class="muted"></span></h2>
-              <input
-                id="round-title"
-                class="round-title"
-                autocomplete="off"
-                placeholder="🏷 룰렛 이름 (예: 메인 메뉴)"
-                title="이번 판의 이름 — 입력하면 룰렛 화면 오른쪽 위에 표시되고 기록에도 남습니다"
-              />
+              <label class="round-title-field">
+                <span class="round-title-label">🏷 룰렛 이름</span>
+                <input
+                  id="round-title"
+                  class="round-title"
+                  autocomplete="off"
+                  placeholder="예: 메인 메뉴 / 사이드 / 디저트"
+                  title="이번 판의 이름 — 입력하면 룰렛 화면 오른쪽 위에 표시되고 기록에도 남습니다"
+                />
+              </label>
             </div>
             <form id="manual-add" class="row">
               <input id="add-name" placeholder="메뉴 이름 직접 추가" maxlength="40" autocomplete="off" />

@@ -190,9 +190,12 @@ function renderMenus(): void {
   const busy = store.phase === 'spinning'
   // 총 칸 수는 사실상 도네 총액이 노출되는 셈이라 표시하지 않는다 (퍼센트는 노출 OK)
   elTotalSlots.textContent = store.menus.length ? `(${store.menus.length}종)` : ''
+  // 이름을 고치는 중에는 목록을 다시 그리지 않는다 (도네가 들어올 때마다 입력칸이 사라지지 않게)
+  if (editingId !== null) return
   const total = store.totalWeight()
   elMenuList.innerHTML = ''
-  store.menus.forEach((m: MenuItem, i: number) => {
+  // 새로 들어온 메뉴가 위에 오도록 거꾸로 깐다. 색 점은 원판 칸 순서(i) 그대로
+  ;[...store.menus.entries()].reverse().forEach(([i, m]: [number, MenuItem]) => {
     const li = document.createElement('li')
     li.className = 'menu-item'
 
@@ -226,10 +229,41 @@ function renderMenus(): void {
     const del = iconBtn('✕', busy, () => store.removeMenu(m.id))
     del.classList.add('del')
     del.title = '이 메뉴 빼기'
+    const edit = iconBtn('🖊️', busy, () => startRename(li, name, m))
+    edit.classList.add('edit')
+    edit.title = '이름 고치기 — 이미 있는 메뉴 이름으로 고치면 칸과 추천자가 합쳐집니다'
 
-    li.append(dot, name, donors, w, pct, minus, plus, del)
+    li.append(dot, name, edit, donors, w, pct, minus, plus, del)
     elMenuList.appendChild(li)
   })
+}
+
+/** 지금 이름을 고치고 있는 메뉴 id (없으면 null) */
+let editingId: number | null = null
+
+/** 이름 칸을 입력칸으로 바꾼다. Enter·다른 곳 클릭 = 저장, Esc = 취소 */
+function startRename(li: HTMLElement, nameEl: HTMLElement, m: MenuItem): void {
+  editingId = m.id
+  const input = document.createElement('input')
+  input.className = 'name-edit'
+  input.value = m.name
+  input.autocomplete = 'off'
+  li.replaceChild(input, nameEl)
+  input.focus()
+  input.select()
+  let done = false
+  const finish = (save: boolean): void => {
+    if (done) return
+    done = true
+    editingId = null
+    if (save) store.renameMenu(m.id, input.value) // 바뀌면 store가 다시 그린다
+    renderMenus() // 안 바뀌었거나 취소해도 원래 모양으로
+  }
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') finish(true)
+    else if (e.key === 'Escape') finish(false)
+  })
+  input.addEventListener('blur', () => finish(true))
 }
 
 // Ctrl+클릭 = 10칸, Alt+클릭 = 100칸 단위로 조절

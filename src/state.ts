@@ -377,6 +377,27 @@ export class Store {
     this.changed()
   }
 
+  /** 메뉴 이름 바꾸기. 바꾼 이름이 다른 메뉴와 같으면(띄어쓰기·뒤 "추가" 무시) 그 항목에 칸과 추천자를 합친다 */
+  renameMenu(id: number, raw: string): void {
+    const m = this.menus.find((x) => x.id === id)
+    const name = canonicalMenuName(raw).slice(0, 40).trim()
+    if (!m || !name || name === m.name) return
+    const key = menuKey(name)
+    const other = this.menus.find((x) => x.id !== id && menuKey(x.name) === key)
+    if (other) {
+      other.weight += m.weight
+      for (const dn of m.donors) if (!other.donors.includes(dn)) other.donors.push(dn)
+      if (this.winner === m) this.winner = other // 당첨 메뉴를 합쳤으면 당첨도 합친 쪽으로
+      this.menus = this.menus.filter((x) => x.id !== id)
+      this.addFeed('info', `✏ "${m.name}" → 이미 있는 "${other.name}"에 합쳤습니다 (+${m.weight}칸)`)
+    } else {
+      this.addFeed('info', `✏ 메뉴 이름 변경: "${m.name}" → "${name}"`)
+      m.name = name
+      this.menus = [...this.menus] // 원판 그림은 배열이 바뀔 때 다시 그린다 (칸 수·총 칸은 그대로라서)
+    }
+    this.changed()
+  }
+
   removeMenu(id: number): void {
     this.menus = this.menus.filter((m) => m.id !== id)
     this.changed()

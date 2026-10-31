@@ -42,3 +42,9 @@ node shot.mjs          # 기본 http://localhost:5173/mukbang-roulette/
 `npm run dev`를 띄운 뒤 `node measure.mjs` — 1920×920/1080/1120 창에서 후보가 몇 줄 보이는지, 룰렛 크기,
 페이지 스크롤, 좌우 여백을 잰다. `node phase.mjs` — 모집·당첨 발표·리롤 접수 단계마다 룰렛 칸 안에 버튼까지
 다 들어가는지(넘침 px) 잰다. 레이아웃을 손볼 때 전후를 숫자로 비교하는 용도.
+
+## 공지 5차 움짤 (patch-gifs.mjs)
+
+`npm run dev`를 띄운 뒤 `node patch-gifs.mjs` — `docs/patch-2026-10-31-{reroll,stop,menus}.gif` 세 장.
+1920×920 창에서 찍고 필요한 칸만 잘라 담는다(룰렛 칸 / 룰렛 위쪽 / 후보+피드 칸).
+녹화·인코딩은 `gif.mjs`(capture.mjs와 공용). 찍은 뒤에는 브라우저에서 재생해 장면이 의도대로인지 꼭 본다.

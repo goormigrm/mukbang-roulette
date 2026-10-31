@@ -9,8 +9,8 @@ import { chromium } from 'playwright'
 
 const SITE = process.argv[2] ?? 'http://localhost:5173/mukbang-roulette/'
 const OUT = '../../docs'
-const VW = 1560
-const VH = 1000
+const VW = 1920 // 1920 모니터의 크롬 창 크기 — 시청자가 실제로 보는 화면
+const VH = 920
 
 // 도네로 만들어진 것처럼 보이도록 추천자 닉네임까지 넣는다 (capture.mjs와 같은 목록)
 const MENUS = [

@@ -386,7 +386,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   text-align: center;
   font-weight: 700;
 }
@@ -425,6 +425,75 @@ body {
   flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
+}
+
+/* ── 결과가 나온 뒤(당첨 발표·리롤 접수) 버튼 배치 ──
+   윗줄: 리롤 · 리롤 도네 받기(재접수) — 이때 가장 많이 누르는 것
+   아랫줄: 다시 돌리기 · 메뉴 추가로 돌아가기 — 잘못 눌렀을 때만 쓰는 예외라 작고 차분하게
+   오른쪽: 결과 확정 — 판을 끝내는 한 번뿐인 버튼이라 점선 너머로 떨어뜨린다 */
+.controls[data-stage='result'] {
+  display: grid;
+  grid-template-columns: auto auto 28px auto;
+  grid-template-areas:
+    'reroll open line confirm'
+    'spin back line confirm';
+  justify-content: center;
+  gap: 8px 12px;
+}
+
+.controls[data-stage='result'] #btn-reroll,
+.controls[data-stage='result'] #btn-open-window {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.controls[data-stage='result']::before {
+  content: '';
+  grid-area: line;
+  justify-self: center;
+  border-left: 2px dashed #cdb894;
+}
+
+.controls[data-stage='result'] #btn-reroll {
+  grid-area: reroll;
+}
+
+.controls[data-stage='result'] #btn-open-window {
+  grid-area: open;
+}
+
+.controls[data-stage='result'] #btn-spin {
+  grid-area: spin;
+}
+
+.controls[data-stage='result'] #btn-back {
+  grid-area: back;
+}
+
+.controls[data-stage='result'] #btn-confirm {
+  grid-area: confirm;
+  padding: 10px 22px;
+  font-size: 20px;
+}
+
+/* 리롤 접수 중에는 [리롤 도네 받기]가 없으니 리롤이 윗줄을 다 쓴다 */
+.controls[data-stage='result']:has(#btn-open-window[hidden]) #btn-reroll {
+  grid-column: 1 / 3;
+}
+
+.controls[data-stage='result'] #btn-spin,
+.controls[data-stage='result'] #btn-back {
+  padding: 7px 16px;
+  border-width: 2px;
+  background: var(--cream);
+  color: var(--ink);
+  font-size: 15px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.controls[data-stage='result'] #btn-spin:hover,
+.controls[data-stage='result'] #btn-back:hover {
+  background: var(--cream-dark);
 }
 
 .controls button {

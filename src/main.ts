@@ -53,6 +53,7 @@ const btnOpenWindow = $<HTMLButtonElement>('#btn-open-window')
 const btnReroll = $<HTMLButtonElement>('#btn-reroll')
 const btnConfirm = $<HTMLButtonElement>('#btn-confirm')
 const btnBack = $<HTMLButtonElement>('#btn-back')
+const elControls = $('.controls')
 const btnPause = $<HTMLButtonElement>('#btn-pause')
 const btnSound = $<HTMLButtonElement>('#btn-sound')
 const btnCloseEntry = $<HTMLButtonElement>('#btn-close-entry')
@@ -549,6 +550,8 @@ function renderButtons(): void {
     store.rerollCredits < 1 ? '🔄 리롤' : askOnClick ? '🔄 리롤 ×1 (마지막)' : `🔄 리롤 ×${store.rerollCredits}`
   btnConfirm.hidden = !(store.phase === 'decision' || store.phase === 'window')
   btnBack.hidden = btnConfirm.hidden
+  // 결과가 나온 뒤에는 버튼을 역할별로 나눠 놓는다 (윗줄 리롤 · 아랫줄 예외 · 오른쪽 따로 결과 확정 — styles.css)
+  elControls.dataset.stage = btnConfirm.hidden ? 'play' : 'result'
 }
 
 let lastBuyerSig = ''

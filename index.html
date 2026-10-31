@@ -86,7 +86,10 @@
         <section id="tab-current" class="tab-panel">
           <div class="card frame">
             <div class="card-head">
-              <h2>오늘의 후보 <span id="total-slots" class="muted"></span></h2>
+              <div class="card-title-row">
+                <h2>오늘의 후보 <span id="total-slots" class="muted"></span></h2>
+                <span class="hint">칸 조절: 클릭 ±1 · Ctrl+클릭 ±10 · Alt+클릭 ±100</span>
+              </div>
               <label class="round-title-field">
                 <span class="round-title-label">🏷 룰렛 이름</span>
                 <input
@@ -103,34 +106,17 @@
               <input id="add-weight" type="number" value="1" min="1" title="칸 수" />
               <button type="submit" class="btn-small">추가</button>
             </form>
-            <input id="menu-search" class="menu-search" type="search" placeholder="🔍 메뉴·추천자 찾기" autocomplete="off" />
             <div id="undo-bar" class="undo-bar" hidden>
               <span id="undo-text"></span>
               <button type="button" id="btn-undo" class="btn-small">↶ 되돌리기</button>
             </div>
             <ul id="menu-list" class="menu-list"></ul>
-            <p class="hint">칸 조절: 클릭 ±1 · Ctrl+클릭 ±10 · Alt+클릭 ±100</p>
-            <div class="row">
+            <input id="menu-search" class="menu-search" type="search" placeholder="🔍 메뉴·추천자 찾기" autocomplete="off" />
+            <div class="menu-tools">
               <button id="btn-export-menus" class="btn-small">💾 메뉴 내보내기</button>
               <label class="btn-small file-label">📂 메뉴 불러오기<input id="import-menus-file" type="file" accept="application/json,.json" hidden /></label>
-            </div>
-            <div class="row">
               <button type="button" id="btn-clear" class="btn-small danger">🧹 룰렛 전체 비우기 (기록은 유지)</button>
             </div>
-          </div>
-
-          <div class="card frame">
-            <h2>도네 피드</h2>
-            <ul id="feed-list" class="feed-list"></ul>
-            <details class="test-box">
-              <summary>🧪 테스트 도네이션</summary>
-              <form id="test-form" class="row wrap">
-                <input id="test-nick" placeholder="닉네임" value="테스터" maxlength="20" />
-                <input id="test-amount" type="number" value="3000" step="1000" min="0" />
-                <input id="test-msg" placeholder="메뉴 (도네 메시지)" maxlength="60" />
-                <button type="submit" class="btn-small">보내기</button>
-              </form>
-            </details>
           </div>
         </section>
 
@@ -161,6 +147,22 @@
             <label>1칸당 금액 (원) <input id="set-won-per-slot" type="number" min="1" /></label>
           </div>
         </section>
+      </aside>
+
+      <aside class="feed-col">
+        <div class="card frame">
+          <h2>도네 피드</h2>
+          <ul id="feed-list" class="feed-list"></ul>
+          <details class="test-box">
+            <summary>🧪 테스트 도네이션</summary>
+            <form id="test-form" class="row wrap">
+              <input id="test-nick" placeholder="닉네임" value="테스터" maxlength="20" />
+              <input id="test-amount" type="number" value="3000" step="1000" min="0" />
+              <input id="test-msg" placeholder="메뉴 (도네 메시지)" maxlength="60" />
+              <button type="submit" class="btn-small">보내기</button>
+            </form>
+          </details>
+        </div>
       </aside>
     </main>
 

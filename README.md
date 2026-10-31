@@ -68,7 +68,7 @@
 npm install
 npm run dev     # http://localhost:5173/mukbang-roulette/
 npm run build   # 타입체크 + dist/ 빌드
-npm test        # 규칙 엔진 테스트 (vitest)
+npm test        # 규칙 엔진 테스트 (vitest, 후보 300종까지)
 ```
 
 **테스트를 통과해야 커밋·푸시·배포된다.** `npm install`이 git 훅(`.githooks/`)을 잡아 주고, 커밋·푸시 때마다 `npm test`가 돈다.

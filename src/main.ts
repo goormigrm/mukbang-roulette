@@ -478,7 +478,7 @@ function renderStatus(): void {
           ? `<div class="armed-banner">${ko(`🔄 리롤권 ×${store.rerollCredits} 보유 — 마지막 리롤이 최종!`)}</div>`
           : ''
       html = store.windowOpened
-        ? `<div class="big reroll-note">${ko(`🔔 리롤 접수 중 — 단일 도네 ${cost}원 이상이면 리롤권 (확정 전까지)`)}</div>${creditNote}${nextRerollNote()}`
+        ? `<div class="big reroll-note">${ko(`🔔 리롤 접수 중 — 단일 도네 ${cost}원 이상이면 리롤권 (확정 전까지)`)}</div>${noteRow(creditNote, nextRerollNote())}`
         : `<div class="big">${ko('🎉 당첨! 아래 버튼에서 선택하세요')}</div>${creditNote}`
       break
     }
@@ -492,11 +492,17 @@ function renderStatus(): void {
       html = `
         <div class="big reroll-note"><span class="phrase">⏱ <span id="remain-sec">${remain}</span>초 안에</span> ${ko(`단일 도네 ${cost}원 이상이면 리롤권 적립!`)}</div>
         <div class="timer-track"><div class="timer-fill" id="timer-fill" style="width:${pct}%"></div></div>
-        ${creditNote}${nextRerollNote()}`
+        ${noteRow(creditNote, nextRerollNote())}`
       break
     }
   }
   elStatusBar.innerHTML = html
+}
+
+/** 리롤권 안내와 다음 리롤 금액을 한 줄에 나란히 — 룰렛 칸 높이를 아껴 원판을 크게 둔다 */
+function noteRow(...parts: string[]): string {
+  const html = parts.join('')
+  return html ? `<div class="note-row">${html}</div>` : ''
 }
 
 /** 정해 둔 다음 리롤 금액 — 방송 화면에도 보여 시청자가 미리 준비할 수 있게 */

@@ -490,6 +490,73 @@ button {
 }
 
 /* 메뉴 목록 */
+/* 후보 검색칸 */
+.menu-search {
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 7px 10px;
+  border: 1.5px solid var(--cream-dark);
+  border-radius: 8px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.menu-search:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.menu-empty {
+  padding: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* [↶ 되돌리기] 줄 — 지우기·합치기 직후 몇 초만 */
+.undo-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--ink);
+  border-radius: 8px;
+  background: #fff4d6;
+  font-weight: 700;
+}
+
+.undo-bar span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 방금 도네로 칸이 늘어난 메뉴 — 금색으로 번쩍였다가 가라앉는다 (길이는 main.ts FLASH_MS와 같게) */
+.menu-item.flash {
+  animation: menu-flash 1.6s ease-out;
+}
+
+@keyframes menu-flash {
+  0%,
+  25% {
+    background: #ffe08a;
+    border-color: var(--gold);
+  }
+  100% {
+    background: #fff;
+  }
+}
+
+.backup-note {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .menu-list {
   list-style: none;
   margin: 0 0 10px;
@@ -518,9 +585,8 @@ button {
   flex-shrink: 0;
 }
 
-/* 이름은 글자만큼만 차지하고(볼펜이 이름 바로 옆에 붙게), 남는 폭은 추천자 칸이 밀어낸다 */
 .menu-item .name {
-  flex: 0 1 auto;
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -528,17 +594,9 @@ button {
   font-weight: 700;
 }
 
+/* 볼펜은 [−][+][✕]와 같은 네모 상자 — 그림 글자라 조금 작게 */
 .menu-item .icon-btn.edit {
-  flex-shrink: 0;
-  border-color: transparent;
-  background: transparent;
-  opacity: 0.55;
-}
-
-.menu-item .icon-btn.edit:hover:not(:disabled) {
-  border-color: var(--ink);
-  background: var(--cream);
-  opacity: 1;
+  font-size: 13px;
 }
 
 .menu-item .name-edit {
@@ -553,7 +611,6 @@ button {
 }
 
 .menu-item .donors {
-  margin-left: auto;
   font-size: 11px;
   color: var(--muted);
   max-width: 110px;

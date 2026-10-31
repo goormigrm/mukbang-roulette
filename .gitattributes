@@ -1,0 +1,2 @@
+# git 훅은 셸 스크립트 — CRLF가 섞이면 다른 PC에서 실행이 깨진다
+.githooks/* text eol=lf

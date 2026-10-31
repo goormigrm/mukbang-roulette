@@ -26,7 +26,8 @@
 리롤 비용·제한시간·모집 마감 시간·칸당 금액 등은 ⚙ 설정에서 자유롭게 변경할 수 있다.
 운영 편의: 도네 반영 일시정지 토글(⏸ — 정지 중엔 리롤 적립도 안 됨), 리롤 도네 없이 [🔁 다시 돌리기], 돌린 뒤 기록 없이 메뉴를 더 받는 [↩ 메뉴 추가로 돌아가기](메뉴는 그대로),
 칸 조절 클릭 ±1 / Ctrl+클릭 ±10 / Alt+클릭 ±100, 메뉴 JSON 내보내기·불러오기, 테스트 도네이션.
-후보 목록은 **새 메뉴가 맨 위**. 이름 옆 **🖊로 이름을 고칠 수 있고**, 이미 있는 메뉴 이름으로 고치면 칸과 추천자 닉네임이 그 메뉴로 합쳐진다.
+후보 목록은 **새 메뉴가 맨 위**. 🖊(또는 이름 두 번 클릭)로 **이름을 고칠 수 있고**, 이미 있는 메뉴 이름으로 고치면 칸과 추천자 닉네임이 그 메뉴로 합쳐진다.
+지우거나 합친 직후 5초 동안은 **[↶ 되돌리기]**. 🔍 검색칸으로 메뉴·추천자를 찾고, 도네로 칸이 늘어난 줄은 잠깐 반짝인다. 기록 탭에 마지막 백업(JSON 내보내기) 날짜가 나온다.
 예시 메뉴 파일 세 가지 — [`public/sample-menus.json`](public/sample-menus.json) (50종, 추천자 없음) ·
 [`public/sample-donations.json`](public/sample-donations.json) (38종, **시청자 도네로 만들어진 상황 재현** — 메뉴마다 추천자 닉네임 포함) ·
 [`public/sample-menus-120.json`](public/sample-menus-120.json) (**120종 671칸**, 도네 도착 순서처럼 섞인 성능·연출 테스트용).
@@ -66,7 +67,11 @@
 npm install
 npm run dev     # http://localhost:5173/mukbang-roulette/
 npm run build   # 타입체크 + dist/ 빌드
+npm test        # 규칙 엔진 테스트 (vitest)
 ```
+
+**테스트를 통과해야 커밋·푸시·배포된다.** `npm install`이 git 훅(`.githooks/`)을 잡아 주고, 커밋·푸시 때마다 `npm test`가 돈다.
+GitHub Actions도 빌드 전에 테스트를 돌려 실패하면 배포하지 않는다.
 
 `main` 브랜치에 push하면 GitHub Actions가 자동으로 GitHub Pages에 배포한다.
 설계 문서: [DESIGN.md](DESIGN.md)

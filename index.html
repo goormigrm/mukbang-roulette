@@ -96,6 +96,11 @@
               <input id="add-weight" type="number" value="1" min="1" title="칸 수" />
               <button type="submit" class="btn-small">추가</button>
             </form>
+            <input id="menu-search" class="menu-search" type="search" placeholder="🔍 메뉴·추천자 찾기" autocomplete="off" />
+            <div id="undo-bar" class="undo-bar" hidden>
+              <span id="undo-text"></span>
+              <button type="button" id="btn-undo" class="btn-small">↶ 되돌리기</button>
+            </div>
             <ul id="menu-list" class="menu-list"></ul>
             <p class="hint">칸 조절: 클릭 ±1 · Ctrl+클릭 ±10 · Alt+클릭 ±100</p>
             <div class="row">
@@ -131,6 +136,7 @@
               <button id="btn-export" class="btn-small">💾 JSON 내보내기</button>
               <label class="btn-small file-label">📂 불러오기<input id="import-file" type="file" accept="application/json,.json" hidden /></label>
             </div>
+            <p id="backup-note" class="backup-note"></p>
             <ul id="history-list" class="history-list"></ul>
           </div>
         </section>

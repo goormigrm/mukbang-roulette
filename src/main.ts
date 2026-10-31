@@ -34,6 +34,9 @@ function doStop(): void {
 
 // ---------- 렌더링 ----------
 const elMenuList = $('#menu-list')
+const elMenuSearch = $<HTMLInputElement>('#menu-search')
+const elUndoBar = $('#undo-bar')
+const elUndoText = $('#undo-text')
 const elFeedList = $('#feed-list')
 const elHistoryList = $('#history-list')
 const elStatusBar = $('#status-bar')
@@ -194,10 +197,21 @@ function renderMenus(): void {
   if (editingId !== null) return
   const total = store.totalWeight()
   elMenuList.innerHTML = ''
+  const q = searchKey(elMenuSearch.value)
+  const flashLeft = FLASH_MS - (Date.now() - flash.at)
+  let shown = 0
   // 새로 들어온 메뉴가 위에 오도록 거꾸로 깐다. 색 점은 원판 칸 순서(i) 그대로
   ;[...store.menus.entries()].reverse().forEach(([i, m]: [number, MenuItem]) => {
+    // 검색칸에 뭔가 적혀 있으면 이름·추천자에 그 글자가 든 메뉴만 (띄어쓰기·대소문자 무시)
+    if (q && !searchKey(m.name).includes(q) && !m.donors.some((dn) => searchKey(dn).includes(q))) return
+    shown++
     const li = document.createElement('li')
     li.className = 'menu-item'
+    // 방금 도네로 칸이 늘어난 메뉴는 잠깐 반짝인다 — 그 사이 목록이 다시 그려져도 이어서
+    if (m.name === flash.name && flashLeft > 0) {
+      li.classList.add('flash')
+      li.style.animationDelay = `${flashLeft - FLASH_MS}ms`
+    }
 
     const dot = document.createElement('span')
     dot.className = 'dot'
@@ -206,7 +220,8 @@ function renderMenus(): void {
     const name = document.createElement('span')
     name.className = 'name'
     name.textContent = m.name
-    name.title = m.name
+    name.title = busy ? m.name : `${m.name} — 두 번 누르면 이름 고치기`
+    if (!busy) name.addEventListener('dblclick', () => startRename(li, name, m))
 
     const donors = document.createElement('span')
     donors.className = 'donors'
@@ -233,9 +248,37 @@ function renderMenus(): void {
     edit.classList.add('edit')
     edit.title = '이름 고치기 — 이미 있는 메뉴 이름으로 고치면 칸과 추천자가 합쳐집니다'
 
-    li.append(dot, name, edit, donors, w, pct, minus, plus, del)
+    // 볼펜은 확률과 [−] 사이 — 이름 길이와 상관없이 늘 같은 자리
+    li.append(dot, name, donors, w, pct, edit, minus, plus, del)
     elMenuList.appendChild(li)
   })
+  if (q && shown === 0) {
+    const li = document.createElement('li')
+    li.className = 'menu-empty'
+    li.textContent = '찾는 메뉴가 없습니다'
+    elMenuList.appendChild(li)
+  }
+}
+
+/** 검색용 글자 — 띄어쓰기를 지우고 소문자로 */
+function searchKey(s: string): string {
+  return s.replace(/\s+/g, '').toLowerCase()
+}
+
+/** 방금 도네로 칸이 늘어난 메뉴 (목록에서 FLASH_MS 동안 반짝임 — styles.css의 menu-flash 길이와 같게) */
+const FLASH_MS = 1600
+let flash = { name: '', at: 0 }
+
+/** [↶ 되돌리기] 줄 — 받아주는 시간이 지나면 저절로 사라진다 */
+let undoTimer = 0
+function renderUndo(): void {
+  clearTimeout(undoTimer)
+  const u = store.undoable
+  const left = u ? u.until - Date.now() : 0
+  elUndoBar.hidden = !u || left <= 0 || store.phase === 'spinning'
+  if (!u || elUndoBar.hidden) return
+  elUndoText.textContent = `방금 ${u.label}`
+  undoTimer = window.setTimeout(renderUndo, left + 20)
 }
 
 /** 지금 이름을 고치고 있는 메뉴 id (없으면 null) */
@@ -310,7 +353,26 @@ function fmtDate(iso: string): string {
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+/** 기록은 이 브라우저(localStorage)에만 있다 — 마지막으로 JSON을 내려받은 때를 보여 백업을 챙기게 한다 */
+const LS_BACKUP = 'mr:last-backup'
+function renderBackupNote(): void {
+  let at = 0
+  try {
+    at = Number(localStorage.getItem(LS_BACKUP)) || 0
+  } catch {
+    /* 저장소를 못 읽으면 "안 함"으로 */
+  }
+  const day = (t: number): number => {
+    const d = new Date(t)
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  }
+  const days = Math.round((day(Date.now()) - day(at)) / 86_400_000)
+  const when = !at ? '아직 한 번도 안 했습니다' : days <= 0 ? '오늘' : days === 1 ? '어제' : `${days}일 전`
+  $('#backup-note').textContent = `💾 마지막 백업: ${when} — 기록은 이 브라우저에만 저장됩니다`
+}
+
 function renderHistory(): void {
+  renderBackupNote()
   $('#history-hint').hidden = store.history.length === 0
   elHistoryList.innerHTML = ''
   if (store.history.length === 0) {
@@ -351,7 +413,7 @@ function renderHistory(): void {
     const menus = document.createElement('ul')
     menus.className = 'round-menus'
     menus.hidden = true
-    for (const m of r.menus) {
+    for (const m of [...r.menus].reverse()) { // 진행 중 목록과 같이 나중에 들어온 메뉴가 위
       const mi = document.createElement('li')
       mi.textContent = `${m.name} ×${m.weight}${m.donors.length ? ` — ${m.donors.join(', ')}` : ''}`
       menus.appendChild(mi)
@@ -665,6 +727,7 @@ function renderAll(): void {
   renderRoundTitle()
   renderPause()
   renderMenus()
+  renderUndo()
   renderFeed()
   renderHistory()
   renderStatus()
@@ -708,7 +771,11 @@ store.on('winner', () => {
 store.on('armed', () => {
   if (store.settings.sound) sound.rerollChime()
 })
-store.on('donation', (d) => showDonationToast(d as AppliedDonation))
+store.on('donation', (d) => {
+  const a = d as AppliedDonation
+  flash = { name: a.name, at: Date.now() } // 바로 뒤 change에서 목록이 그 줄을 반짝인다
+  showDonationToast(a)
+})
 store.on('confirmed', () => {
   if (store.settings.sound) sound.finale()
 })
@@ -795,6 +862,8 @@ btnBack.addEventListener('click', async () => {
   activateTab('current') // 들어오는 메뉴를 바로 볼 수 있게
 })
 btnPause.addEventListener('click', () => store.togglePaused())
+$('#btn-undo').addEventListener('click', () => store.undo())
+elMenuSearch.addEventListener('input', () => renderMenus())
 // 타이핑 중에는 룰렛 현판만 미리 보여주고, 저장은 입력을 마칠 때(blur) 한 번만 한다
 elRoundTitle.addEventListener('input', () => {
   renderRoundTitle()
@@ -910,6 +979,12 @@ $('#btn-export').addEventListener('click', () => {
   a.download = `mukbang-roulette-기록-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.json`
   a.click()
   URL.revokeObjectURL(a.href)
+  try {
+    localStorage.setItem(LS_BACKUP, String(Date.now()))
+  } catch {
+    /* 저장소가 막혀 있으면 표시만 못 바꾼다 */
+  }
+  renderBackupNote()
 })
 
 $<HTMLInputElement>('#import-file').addEventListener('change', async (e) => {

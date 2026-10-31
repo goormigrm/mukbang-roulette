@@ -1,0 +1,16 @@
+#!/bin/sh
+# 커밋 전에 테스트를 전부 돌린다 — 하나라도 실패하면 커밋하지 않는다.
+# (npm install 하면 package.json의 prepare가 이 폴더를 git 훅 폴더로 잡아 준다)
+
+# Git GUI·데스크톱 앱에서 커밋하면 PATH에 node가 없을 수 있다 — 윈도 기본 설치 위치를 덧붙인다
+command -v npm >/dev/null 2>&1 || PATH="/c/Program Files/nodejs:$PATH"
+if ! command -v npm >/dev/null 2>&1; then
+  echo "✖ npm을 찾을 수 없어 테스트를 못 돌립니다 — Node.js를 설치하거나 PATH에 넣어 주세요." >&2
+  exit 1
+fi
+
+npm test --silent || {
+  echo "" >&2
+  echo "✖ 테스트 실패 — 커밋을 막았습니다. 위 실패 내용을 고친 뒤 다시 커밋하세요." >&2
+  exit 1
+}

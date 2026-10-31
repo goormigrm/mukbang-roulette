@@ -115,6 +115,9 @@ const LS_FEED = 'mr:feed'
 const LS_ROUND = 'mr:round'
 export const MAX_HISTORY = 20
 
+/** [↶ 되돌리기]를 받아주는 시간 — 메뉴를 지우거나 이름을 고쳐 합친 직후 (사용자 승인 2026-10-31) */
+export const UNDO_MS = 5000
+
 /** 새로고침해도 이어지도록 저장하는 진행 중 라운드 상태 */
 interface RoundState {
   phase: Phase
@@ -167,6 +170,8 @@ export class Store {
   windowOpened = false
   /** 버저비터 마감 시각 (epoch ms) — 0이면 진행 중이 아님. 방송 딜레이 보정용 */
   graceUntil = 0
+  /** 방금 한 지우기·합치기를 되돌리는 방법 — 마지막 한 번만, `until`(epoch ms)까지 */
+  undoable: { label: string; until: number; restore: () => void } | null = null
   /** 금액을 올리기 직전의 리롤 비용과, 그 금액을 더 받아주는 마감 시각 (epoch ms) */
   private prevRerollCost = 0
   private prevRerollUntil = 0
@@ -257,7 +262,8 @@ export class Store {
       return
     }
     if (!r.winner) return
-    this.winner = r.winner
+    // 목록의 같은 메뉴 객체에 다시 잇는다 — 복사본이면 새로고침 뒤 이름 고치기·합치기가 당첨에 반영되지 않는다
+    this.winner = this.menus.find((x) => x.id === r.winner!.id) ?? r.winner
     this.confirmedWinner = r.confirmedWinner ?? null
     this.rerollCredits = Math.max(0, Number(r.rerollCredits) || 0)
     this.rerollUsers = Array.isArray(r.rerollUsers) ? r.rerollUsers.map(String) : []
@@ -385,11 +391,22 @@ export class Store {
     const key = menuKey(name)
     const other = this.menus.find((x) => x.id !== id && menuKey(x.name) === key)
     if (other) {
+      const at = this.menus.indexOf(m)
+      const addedDonors = m.donors.filter((dn) => !other.donors.includes(dn))
+      const wasWinner = this.winner === m
       other.weight += m.weight
-      for (const dn of m.donors) if (!other.donors.includes(dn)) other.donors.push(dn)
-      if (this.winner === m) this.winner = other // 당첨 메뉴를 합쳤으면 당첨도 합친 쪽으로
+      other.donors.push(...addedDonors)
+      if (wasWinner) this.winner = other // 당첨 메뉴를 합쳤으면 당첨도 합친 쪽으로
       this.menus = this.menus.filter((x) => x.id !== id)
       this.addFeed('info', `✏ "${m.name}" → 이미 있는 "${other.name}"에 합쳤습니다 (+${m.weight}칸)`)
+      this.offerUndo(`"${m.name}" → "${other.name}" 합치기`, () => {
+        // 합칠 때 더한 만큼만 도로 뺀다 — 그 사이 도네로 늘어난 칸·추천자는 남는다
+        other.weight -= m.weight
+        other.donors = other.donors.filter((dn) => !addedDonors.includes(dn))
+        if (other.weight <= 0) this.menus = this.menus.filter((x) => x !== other)
+        if (wasWinner && this.winner === other) this.winner = m
+        this.putBack(m, at)
+      })
     } else {
       this.addFeed('info', `✏ 메뉴 이름 변경: "${m.name}" → "${name}"`)
       m.name = name
@@ -399,22 +416,64 @@ export class Store {
   }
 
   removeMenu(id: number): void {
-    this.menus = this.menus.filter((m) => m.id !== id)
+    const at = this.menus.findIndex((m) => m.id === id)
+    if (at < 0) return
+    const m = this.menus[at]
+    this.menus = this.menus.filter((x) => x.id !== id)
+    this.offerUndo(`"${m.name}" 삭제`, () => this.putBack(m, at))
     this.changed()
   }
 
   changeWeight(id: number, delta: number): void {
-    const m = this.menus.find((x) => x.id === id)
-    if (!m) return
+    const at = this.menus.findIndex((x) => x.id === id)
+    if (at < 0) return
+    const m = this.menus[at]
+    const before = m.weight
     m.weight += delta
-    if (m.weight <= 0) this.menus = this.menus.filter((x) => x.id !== id)
+    if (m.weight <= 0) {
+      // 칸을 0까지 빼면 메뉴가 빠진다 — 지우기와 똑같이 되돌릴 수 있게
+      this.menus = this.menus.filter((x) => x.id !== id)
+      this.offerUndo(`"${m.name}" 삭제`, () => {
+        m.weight = before
+        this.putBack(m, at)
+      })
+    }
     this.changed()
+  }
+
+  /** [↶ 되돌리기] — 받아주는 시간 안에만. 도는 중에는 안 된다(원판 칸이 바뀌면 착지 칸이 어긋난다) */
+  undo(): void {
+    const u = this.undoable
+    if (!u || Date.now() > u.until || this.phase === 'spinning') return
+    this.undoable = null
+    u.restore()
+    this.addFeed('info', `↶ 되돌림 — ${u.label}`)
+    this.changed()
+  }
+
+  private offerUndo(label: string, restore: () => void): void {
+    this.undoable = { label, until: Date.now() + UNDO_MS, restore }
+  }
+
+  /** 빠졌던 메뉴를 원래 자리에 되돌려 놓는다. 그 사이 도네로 같은 메뉴가 새로 생겼으면 그 칸·추천자를 흡수한다 */
+  private putBack(m: MenuItem, at: number): void {
+    const key = menuKey(m.name)
+    const dup = this.menus.find((x) => menuKey(x.name) === key)
+    if (dup) {
+      m.weight += dup.weight
+      for (const dn of dup.donors) if (!m.donors.includes(dn)) m.donors.push(dn)
+      this.menus = this.menus.filter((x) => x !== dup)
+    }
+    const next = [...this.menus]
+    next.splice(Math.min(at, next.length), 0, m)
+    this.menus = next
   }
 
   /** 룰렛 전체 비우기 — 후보뿐 아니라 진행 중 라운드(당첨·리롤권·접수 타이머)도 모집 상태로 되돌린다 */
   clearMenus(): void {
     this.stopCountdown()
     this.stopGrace()
+    this.undoable = null
     this.menus = []
     this.phase = 'collect'
     this.winner = null
@@ -580,6 +639,7 @@ export class Store {
     }
 
     this.stopGrace()
+    this.undoable = null // 돌기 시작하면 원판 칸이 고정돼야 한다
     this.phase = 'spinning'
     this.pendingWinner = null
     this.winner = null
@@ -871,6 +931,7 @@ export class Store {
       }
     }
     if (menus.length === 0) throw new Error('불러올 메뉴가 없습니다')
+    this.undoable = null // 목록을 통째로 바꿨으니 예전 목록 기준 되돌리기는 무효
     this.menus = menus
     this.addFeed('info', `📂 메뉴 ${menus.length}종 불러오기 완료 (기존 목록 교체)`)
     this.changed()

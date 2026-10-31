@@ -98,6 +98,74 @@ body {
 }
 
 /* 일시정지 토글 */
+/* 효과음 스위치 — 이름표 + 단축키 + 두 칸짜리 알약, 지금 상태 쪽에 불이 들어온다 */
+.sound-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 4px 3px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.sound-toggle:hover {
+  background: var(--cream);
+}
+
+.sound-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--ink);
+}
+
+.sound-toggle kbd {
+  min-width: 20px;
+  padding: 0 5px;
+  border: 1.5px solid var(--ink);
+  border-radius: 5px;
+  background: var(--cream);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 18px;
+  text-align: center;
+}
+
+.sound-toggle-track {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--cream-dark);
+}
+
+.sound-toggle-track .opt {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 26px;
+  border-radius: 999px;
+  font-size: 15px;
+  opacity: 0.35;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.sound-toggle[aria-pressed="true"] .opt.on {
+  background: #1d7a3d;
+  opacity: 1;
+}
+
+.sound-toggle[aria-pressed="false"] .opt.off {
+  background: #8b7a6e;
+  opacity: 1;
+}
+
 .pause-toggle {
   border: 2px solid var(--gold);
   border-radius: 999px;

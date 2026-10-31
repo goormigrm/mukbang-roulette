@@ -54,6 +54,7 @@ const btnReroll = $<HTMLButtonElement>('#btn-reroll')
 const btnConfirm = $<HTMLButtonElement>('#btn-confirm')
 const btnBack = $<HTMLButtonElement>('#btn-back')
 const btnPause = $<HTMLButtonElement>('#btn-pause')
+const btnSound = $<HTMLButtonElement>('#btn-sound')
 const btnCloseEntry = $<HTMLButtonElement>('#btn-close-entry')
 const elWinnerStamp = $('#winner-stamp')
 const elWinnerDonors = $('#winner-donors')
@@ -182,6 +183,12 @@ function placeRoundTitle(): void {
   }
   // 어디에도 깨끗이 안 들어감 — 가장 작은 글씨로 넓게 (원판 쪽으로 내려가지 않게)
   apply(TITLE_FONT_SIZES[TITLE_FONT_SIZES.length - 1], maxW)
+}
+
+/** 오른쪽 위 효과음 스위치 — 켜진 쪽(🔊/🔇)에 불이 들어온다 */
+function renderSound(): void {
+  btnSound.setAttribute('aria-pressed', String(store.settings.sound))
+  btnSound.title = `효과음 ${store.settings.sound ? '켜짐' : '꺼짐'} — 눌러서 ${store.settings.sound ? '끄기' : '켜기'} (단축키 M)`
 }
 
 function renderPause(): void {
@@ -725,6 +732,7 @@ function renderBigTimer(): void {
 
 function renderAll(): void {
   renderRoundTitle()
+  renderSound()
   renderPause()
   renderMenus()
   renderUndo()
@@ -862,6 +870,17 @@ btnBack.addEventListener('click', async () => {
   activateTab('current') // 들어오는 메뉴를 바로 볼 수 있게
 })
 btnPause.addEventListener('click', () => store.togglePaused())
+btnSound.addEventListener('click', () => {
+  const on = !store.settings.sound
+  store.updateSettings({ sound: on })
+  // 도는 중에 끄면 이미 울리고 있는 딸깍·드럼롤도 바로 멈춘다 (다시 켜면 딸깍은 이어서)
+  if (!on) {
+    sound.stopTicking()
+    sound.stopDrumroll()
+  } else if (wheel.isSpinning) {
+    sound.startTicking(() => wheel.tickRate, () => wheel.stopProgress)
+  }
+})
 $('#btn-undo').addEventListener('click', () => store.undo())
 elMenuSearch.addEventListener('input', () => renderMenus())
 // 타이핑 중에는 룰렛 현판만 미리 보여주고, 저장은 입력을 마칠 때(blur) 한 번만 한다
@@ -886,6 +905,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Space') target = btnSpin
   else if (e.code === 'KeyR') target = btnReroll
   else if (e.code === 'Enter') target = btnConfirm
+  else if (e.code === 'KeyM') target = btnSound
   if (!target) return
   e.preventDefault()
   // 포커스가 버튼에 남아 있으면 브라우저 기본 동작으로 한 번 더 눌리는 걸 막는다
@@ -1008,7 +1028,6 @@ function initSettingsInputs(): void {
   $<HTMLInputElement>('#set-grace-sec').value = String(store.settings.graceSec)
   $<HTMLInputElement>('#set-min-amount').value = String(store.settings.minAmount)
   $<HTMLInputElement>('#set-won-per-slot').value = String(store.settings.wonPerSlot)
-  $<HTMLInputElement>('#set-sound').checked = store.settings.sound
 }
 
 function applySettingsInputs(): void {
@@ -1030,11 +1049,10 @@ function applySettingsInputs(): void {
     minAmount: Math.max(0, Math.floor(num('#set-min-amount', 1000))),
     // 0 나눗셈 방지만
     wonPerSlot: Math.max(1, Math.floor(num('#set-won-per-slot', 1000))),
-    sound: $<HTMLInputElement>('#set-sound').checked,
   })
 }
 
-for (const id of ['#set-reroll-cost', '#set-reroll-sec', '#set-closing-sec', '#set-grace-sec', '#set-min-amount', '#set-won-per-slot', '#set-sound']) {
+for (const id of ['#set-reroll-cost', '#set-reroll-sec', '#set-closing-sec', '#set-grace-sec', '#set-min-amount', '#set-won-per-slot']) {
   $(id).addEventListener('change', applySettingsInputs)
 }
 initSettingsInputs()

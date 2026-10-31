@@ -20,6 +20,13 @@
         <h1 class="brand-sub">먹방 룰렛</h1>
       </div>
       <div class="topbar-actions">
+        <button id="btn-sound" class="sound-toggle" type="button" aria-pressed="true" title="효과음 켜기/끄기 (단축키 M)">
+          <span class="sound-toggle-label">효과음 <kbd>M</kbd></span>
+          <span class="sound-toggle-track" aria-hidden="true">
+            <span class="opt off">🔇</span>
+            <span class="opt on">🔊</span>
+          </span>
+        </button>
         <button id="btn-pause" class="pause-toggle" title="도네이션 메뉴 반영 일시정지/재개"></button>
         <span id="conn-badge" class="badge badge-off">치지직 미연결</span>
         <button id="btn-chzzk-login" class="btn-ghost" title="공식 치지직 페이지에서 동의만 하면 연동됩니다">치지직 로그인</button>
@@ -66,7 +73,7 @@
           <button id="btn-confirm" class="btn-confirm" hidden>✅ 결과 확정</button>
           <button id="btn-back" class="btn-back" hidden>↩ 메뉴 추가로 돌아가기</button>
         </div>
-        <p class="hint shortcut-hint">단축키: <b>Space</b> 돌리기·정지·다시 돌리기 · <b>R</b> 리롤 · <b>Enter</b> 결과 확정</p>
+        <p class="hint shortcut-hint">단축키: <b>Space</b> 돌리기·정지·다시 돌리기 · <b>R</b> 리롤 · <b>Enter</b> 결과 확정 · <b>M</b> 효과음 켜기/끄기</p>
       </section>
 
       <aside class="side">
@@ -152,7 +159,6 @@
             </label>
             <label>최소 인정 금액 (원) <input id="set-min-amount" type="number" step="500" min="0" /></label>
             <label>1칸당 금액 (원) <input id="set-won-per-slot" type="number" min="1" /></label>
-            <label class="check"><input id="set-sound" type="checkbox" /> 효과음 켜기</label>
           </div>
         </section>
       </aside>

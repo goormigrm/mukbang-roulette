@@ -1,6 +1,6 @@
 import './styles.css'
 import { REROLL_PRESETS, cheese, store, suggestNextRerollCost } from './state'
-import type { AppliedDonation, MenuItem, Round } from './state'
+import type { AppliedDonation, FeedEntry, MenuItem, Round } from './state'
 import { MIN_SPIN_MS, RouletteWheel, segColor } from './roulette'
 import * as sound from './sound'
 import * as chzzk from './chzzk'
@@ -17,7 +17,7 @@ function doSpin(useCredit = false): void {
   if (!store.beginSpin(useCredit)) return
   wheel.startFreeSpin()
   // 딸깍 소리는 화면 프레임이 아니라 오디오 시계로 돈다 (메뉴가 많아도 끊기지 않게)
-  if (store.settings.sound) sound.startTicking(() => wheel.tickRate, () => wheel.stopProgress)
+  if (store.settings.sound) sound.startTicking((from, to) => wheel.tickEvents(from, to))
   // 최소 회전 시간이 지나면 [정지!]를 켜준다 (그 사이엔 스토어 변경이 없어 자동 리렌더가 안 되므로)
   setTimeout(renderButtons, MIN_SPIN_MS + 30)
 }
@@ -206,10 +206,17 @@ function renderMenus(): void {
   elTotalSlots.textContent = store.menus.length ? `(${store.menus.length}종)` : ''
   // 이름을 고치는 중에는 목록을 다시 그리지 않는다 (도네가 들어올 때마다 입력칸이 사라지지 않게)
   if (editingId !== null) return
-  const total = store.totalWeight()
-  elMenuList.innerHTML = ''
   const q = searchKey(elMenuSearch.value)
   const flashLeft = FLASH_MS - (Date.now() - flash.at)
+  // 보이는 내용이 그대로면 다시 깔지 않는다 — 도는 중에도 도네(무시됨)가 올 때마다 300줄을 새로 깔아
+  // 한 번에 30~120ms씩 걸려 룰렛이 끊겼다
+  const sig = [busy, q, flashLeft > 0 ? `${flash.name}@${flash.at}` : '']
+    .concat(store.menus.map((m) => `${m.id}:${m.name}:${m.weight}:${m.donors.length}`))
+    .join('|')
+  if (sig === menusSig) return
+  menusSig = sig
+  const total = store.totalWeight()
+  elMenuList.innerHTML = ''
   let shown = 0
   // 새로 들어온 메뉴가 위에 오도록 거꾸로 깐다. 색 점은 원판 칸 순서(i) 그대로
   ;[...store.menus.entries()].reverse().forEach(([i, m]: [number, MenuItem]) => {
@@ -294,6 +301,8 @@ function renderUndo(): void {
 
 /** 지금 이름을 고치고 있는 메뉴 id (없으면 null) */
 let editingId: number | null = null
+/** 후보 목록을 마지막으로 그린 내용 — 같으면 다시 그리지 않는다 */
+let menusSig = ''
 
 /** 이름 칸을 입력칸으로 바꾼다. Enter·다른 곳 클릭 = 저장, Esc = 취소 */
 function startRename(li: HTMLElement, nameEl: HTMLElement, m: MenuItem): void {
@@ -310,6 +319,7 @@ function startRename(li: HTMLElement, nameEl: HTMLElement, m: MenuItem): void {
     if (done) return
     done = true
     editingId = null
+    menusSig = '' // 입력칸을 끼워 넣었던 줄이라 내용이 같아도 새로 깐다
     if (save) store.renameMenu(m.id, input.value) // 바뀌면 store가 다시 그린다
     renderMenus() // 안 바뀌었거나 취소해도 원래 모양으로
   }
@@ -337,25 +347,38 @@ function iconBtn(label: string, disabled: boolean, onClick: (e: MouseEvent) => v
   return b
 }
 
+/** 피드 맨 위에 그려 둔 줄 — 새 줄은 그 위에만 끼워 넣는다 (예전엔 도네마다 80줄을 새로 깔았다) */
+let feedTop: FeedEntry | null = null
+const FEED_ROWS = 80
+
 function renderFeed(): void {
-  elFeedList.innerHTML = ''
-  for (const f of store.feed.slice(0, 80)) {
-    const li = document.createElement('li')
-    li.className = `feed-${f.kind}`
-    const t = document.createElement('span')
-    t.className = 't'
-    t.textContent = f.time
-    li.appendChild(t)
-    // 구 단위로 끊어 넣는다 — "반영되지 / 않습니다"처럼 말이 갈리지 않게
-    koPhrases(f.text).forEach((p, i) => {
-      if (i > 0) li.appendChild(document.createTextNode(' '))
-      const span = document.createElement('span')
-      span.className = 'phrase'
-      span.textContent = p
-      li.appendChild(span)
-    })
-    elFeedList.appendChild(li)
-  }
+  const k = feedTop ? store.feed.indexOf(feedTop) : -1
+  if (k === 0) return // 새 줄 없음
+  const fresh = k > 0 && k < FEED_ROWS ? store.feed.slice(0, k) : store.feed.slice(0, FEED_ROWS)
+  if (!(k > 0 && k < FEED_ROWS)) elFeedList.innerHTML = '' // 처음이거나 한꺼번에 많이 바뀌면 통째로
+  const frag = document.createDocumentFragment()
+  for (const f of fresh) frag.appendChild(feedRow(f))
+  elFeedList.prepend(frag)
+  while (elFeedList.children.length > FEED_ROWS) elFeedList.lastElementChild?.remove()
+  feedTop = store.feed[0] ?? null
+}
+
+function feedRow(f: FeedEntry): HTMLLIElement {
+  const li = document.createElement('li')
+  li.className = `feed-${f.kind}`
+  const t = document.createElement('span')
+  t.className = 't'
+  t.textContent = f.time
+  li.appendChild(t)
+  // 구 단위로 끊어 넣는다 — "반영되지 / 않습니다"처럼 말이 갈리지 않게
+  koPhrases(f.text).forEach((p, i) => {
+    if (i > 0) li.appendChild(document.createTextNode(' '))
+    const span = document.createElement('span')
+    span.className = 'phrase'
+    span.textContent = p
+    li.appendChild(span)
+  })
+  return li
 }
 
 function fmtDate(iso: string): string {
@@ -382,8 +405,14 @@ function renderBackupNote(): void {
   $('#backup-note').textContent = `💾 마지막 백업: ${when} — 기록은 이 브라우저에만 저장됩니다`
 }
 
+/** 기록 목록을 마지막으로 그린 내용 — 같으면 다시 그리지 않는다(펼쳐 둔 줄도 그대로 남는다) */
+let historySig = ''
+
 function renderHistory(): void {
   renderBackupNote()
+  const sig = `${store.history.length}|${store.history[0]?.id ?? ''}|${store.history[0]?.endedAt ?? ''}`
+  if (sig === historySig) return
+  historySig = sig
   $('#history-hint').hidden = store.history.length === 0
   elHistoryList.innerHTML = ''
   if (store.history.length === 0) {
@@ -890,7 +919,7 @@ btnSound.addEventListener('click', () => {
     sound.stopTicking()
     sound.stopDrumroll()
   } else if (wheel.isSpinning) {
-    sound.startTicking(() => wheel.tickRate, () => wheel.stopProgress)
+    sound.startTicking((from, to) => wheel.tickEvents(from, to))
   }
 })
 $('#btn-undo').addEventListener('click', () => store.undo())
@@ -1201,4 +1230,5 @@ void (async () => {
 // 콘솔 디버깅용 (개발 서버에서만)
 if (import.meta.env.DEV) {
   ;(window as unknown as Record<string, unknown>).__store = store
+  ;(window as unknown as Record<string, unknown>).__wheel = wheel // 회전·딸깍 동기 측정용
 }

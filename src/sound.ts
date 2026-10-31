@@ -129,32 +129,44 @@ export function tick(progress = 0, when = 0, gainScale = 1): void {
 }
 
 // ---- 회전 딸깍 스케줄러 ----
-// 예전에는 화면 프레임마다 딸깍을 울렸는데, 메뉴가 100종을 넘어 프레임이 떨어지면
-// 소리까지 뚝뚝 끊겼다. 이제 오디오 시계에 미리 예약해 두어 화면과 무관하게 고르게 난다.
-const TICK_MAX_RATE = 36 // 초당 최대 딸깍 (그 이상은 사람 귀에 뭉개지고 부하만 커진다)
+// 딸깍은 "포인터가 칸 경계·핀을 지나는 바로 그 순간"에 난다. 룰렛이 그 순간을 미리 계산해 주면(events)
+// 오디오 시계에 0.12초 앞까지 예약한다 — 화면 프레임과 무관해서 끊기지 않고, 포인터 위 이름이 바뀌는 순간·
+// 흰 번쩍임·포인터 튕김과 같은 박자다. (예전에는 평균 속도로 일정하게 쳐서 큰 칸·작은 칸이 같은 박자였다)
+const TICK_MAX_RATE = 36 // 초당 최대 딸깍 — 이보다 촘촘하면 귀에 뭉개지므로 솎는다
+const TICK_HORIZON_MS = 120
 let tickTimer: ReturnType<typeof setInterval> | null = null
-let tickNext = 0
+let tickFrom = 0
+let lastTickAt = -1e9
 
-/** 회전 시작 — rateFn(초당 딸깍 횟수)과 progressFn(감속 진행도)을 읽어 계속 예약한다 */
-export function startTicking(rateFn: () => number, progressFn: () => number): void {
+export interface TickEvent {
+  /** 지나는 시각 (performance.now 기준 ms) */
+  at: number
+  /** 칸 경계면 true (이름이 바뀌는 자리), 큰 칸 안의 핀이면 false */
+  edge: boolean
+  /** 감속 진행도 0~1 — 멈출수록 음이 높아진다 */
+  progress: number
+}
+
+/** 회전 시작 — events(from, to)가 그 사이 경계를 지나는 순간들을 돌려주면 그대로 예약한다 */
+export function startTicking(events: (fromMs: number, toMs: number) => TickEvent[]): void {
   const a = ac()
   if (!a || tickTimer) return
-  tickNext = a.currentTime + 0.05
+  tickFrom = performance.now()
+  lastTickAt = -1e9
   tickTimer = setInterval(() => {
-    const horizon = a.currentTime + 0.25 // 0.25초 앞까지 미리 예약
-    let guard = 0
-    while (tickNext < horizon && guard++ < 60) {
-      const rate = Math.min(TICK_MAX_RATE, Math.max(0, rateFn()))
-      if (rate < 0.7) {
-        // 거의 멈춤 — 잠시 뒤 다시 본다
-        tickNext = a.currentTime + 0.1
-        break
-      }
-      // 촘촘할수록 한 방씩은 살짝 부드럽게 (겹쳐서 뭉개지지 않게)
-      tick(progressFn(), tickNext - a.currentTime, rate > 16 ? 0.8 : 1)
-      tickNext += 1 / rate
+    const now = performance.now()
+    const to = now + TICK_HORIZON_MS
+    // 늦게 깨어났으면 지나간 순간은 버린다 (몰아서 울리지 않게)
+    for (const e of events(Math.max(tickFrom, now), to)) {
+      const gap = e.at - lastTickAt
+      if (gap < 1000 / TICK_MAX_RATE) continue
+      lastTickAt = e.at
+      // 촘촘할수록·핀이면 한 방씩은 살짝 부드럽게 (칸 경계가 더 또렷하게)
+      const gain = (gap < 1000 / 16 ? 0.8 : 1) * (e.edge ? 1 : 0.78)
+      tick(e.progress, (e.at - now) / 1000, gain)
     }
-  }, 70)
+    tickFrom = to
+  }, 30)
 }
 
 export function stopTicking(): void {

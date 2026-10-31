@@ -8,7 +8,8 @@
 
 import type { MenuItem } from './state'
 
-const TAU = Math.PI * 2
+import { boundaryIndexAt, crossings, easeOutCubic, freeTurn, tickBoundaries, TAU } from './spin'
+import type { Boundary } from './spin'
 const POINTER_ANGLE = -Math.PI / 2 // 12시 방향
 
 // 확장프로그램과 같은 계열의 선명한 원색 팔레트 (Material 계열, 인접 칸 구분 뚜렷)
@@ -31,9 +32,6 @@ export function segColor(i: number): string {
   return PALETTE[i % PALETTE.length]
 }
 
-function easeOutCubic(t: number): number {
-  return 1 - Math.pow(1 - t, 3)
-}
 
 type SpinMode = 'idle' | 'free' | 'stopping'
 
@@ -52,8 +50,18 @@ export class RouletteWheel {
   private watchdog: ReturnType<typeof setInterval> | null = null
   private lastFrameAt = 0
 
-  // free 회전 상태
+  // free 회전 상태 — 회전량은 시작 시각·시작 각도로부터 계산한다(프레임마다 더하지 않는다)
   private freeStartAt = 0
+  private freeStartRot = 0
+
+  // 딸깍 경계(칸 경계 + 큰 칸 안의 핀) — 칸이 바뀔 때만 다시 만든다
+  private bounds: Boundary[] = []
+  private boundsVersion = -1
+  // 화면 쪽 동기화: 포인터가 마지막으로 새 칸에 들어선 시각(흰 번쩍임), 핀을 친 시각(포인터 튕김)
+  private segIdx = -1
+  private segEnteredAt = 0
+  private pegIdx = -1
+  private pegHitAt = -1e9
 
   // 칸 각도 캐시 — 메뉴가 바뀔 때만 다시 계산한다
   private segs: { start: number; end: number }[] = []
@@ -94,29 +102,38 @@ export class RouletteWheel {
     return this.mode === 'stopping'
   }
 
-  /** 현재 각속도 (rad/s) — 소리 빈도를 속도에 맞추는 데 쓴다 */
-  get angularSpeed(): number {
-    const now = performance.now()
-    if (this.mode === 'free') return this.freeVelocity(now)
-    if (this.mode === 'stopping') {
-      // easeOutCubic의 순간 기울기: 3·(1-t)²·회전량 / 지속시간
-      const t = Math.min(1, (now - this.stopStartAt) / this.stopDuration)
-      return (3 * (1 - t) ** 2 * (this.stopEndRot - this.stopStartRot)) / (this.stopDuration / 1000)
-    }
-    return 0
-  }
-
-  /** 초당 몇 번 딸깍여야 하는지 (핀/칸을 지나는 속도) */
-  get tickRate(): number {
-    const units = this.getItems().length > PEGS ? Math.max(1, this.segs.length) : PEGS
-    return (this.angularSpeed / TAU) * units
-  }
-
   /** 감속 진행도 0~1 (자유 회전 중엔 0) — 멈추기 직전일수록 소리가 높아진다 */
-  get stopProgress(): number {
-    return this.mode === 'stopping'
-      ? Math.min(1, (performance.now() - this.stopStartAt) / this.stopDuration)
-      : 0
+  private progressAt(t: number): number {
+    return this.mode === 'stopping' ? Math.min(1, Math.max(0, (t - this.stopStartAt) / this.stopDuration)) : 0
+  }
+
+  /** 시각 t(performance.now 기준 ms)의 회전량 — 화면과 소리가 같은 함수를 쓴다 */
+  private rotationAt(t: number): number {
+    if (this.mode === 'free') return this.freeStartRot + freeTurn(t - this.freeStartAt, MAX_SPEED, ACCEL_MS)
+    if (this.mode === 'stopping') {
+      const u = Math.min(1, Math.max(0, (t - this.stopStartAt) / this.stopDuration))
+      return this.stopStartRot + (this.stopEndRot - this.stopStartRot) * easeOutCubic(u)
+    }
+    return this.rotation
+  }
+
+  private syncBounds(): Boundary[] {
+    this.syncSegs()
+    if (this.boundsVersion !== this.geomVersion) {
+      this.bounds = tickBoundaries(this.segs, PEGS)
+      this.boundsVersion = this.geomVersion
+    }
+    return this.bounds
+  }
+
+  /** fromMs~toMs 동안 포인터가 칸 경계·핀을 지나는 순간들 — 소리를 정확히 그 순간에 예약하는 데 쓴다.
+   *  화면은 같은 rotationAt으로 그리므로 딸깍 = 이름이 바뀌는 순간 = 흰 번쩍임이 시작되는 순간이다 */
+  tickEvents(fromMs: number, toMs: number): { at: number; edge: boolean; progress: number }[] {
+    if (this.mode === 'idle' || this.getItems().length === 0) return []
+    return crossings((t) => this.rotationAt(t), fromMs, toMs, this.syncBounds(), POINTER_ANGLE).map((c) => ({
+      ...c,
+      progress: this.progressAt(c.at),
+    }))
   }
 
   /** 최소 회전 시간을 채워 이제 정지할 수 있는지 */
@@ -264,17 +281,21 @@ export class RouletteWheel {
 
     // 감속 절반을 지나면 포인터 아래 칸을 번쩍여 "여기 걸릴까?" 긴장을 만든다.
     // 멈추기 직전으로 갈수록 점점 세게 빛난다.
+    // 번쩍임은 따로 도는 박자가 아니라 "새 칸이 포인터에 닿는 순간" 터졌다가 사그라든다 — 딸깍과 같은 순간.
+    const now = performance.now()
+    const idx = this.indexAtPointer()
+    this.trackPointer(idx, now)
     if (this.mode === 'stopping') {
-      const t = (performance.now() - this.stopStartAt) / this.stopDuration
+      const t = (now - this.stopStartAt) / this.stopDuration
       if (t > 0.5) {
         const k = Math.min(1, (t - 0.5) / 0.5) // 번쩍임 강도 0 → 1
-        const blink = 0.6 + 0.4 * Math.abs(Math.sin(performance.now() / 85))
-        const seg = segs[this.indexAtPointer()]
+        const hit = Math.exp(-(now - this.segEnteredAt) / 140) // 칸에 들어선 순간 1 → 사그라듦
+        const seg = segs[idx]
         ctx.beginPath()
         ctx.moveTo(cx, cy)
         ctx.arc(cx, cy, R, seg.start + this.rotation, seg.end + this.rotation)
         ctx.closePath()
-        ctx.fillStyle = `rgba(255, 255, 255, ${((0.18 + 0.34 * k) * blink).toFixed(3)})`
+        ctx.fillStyle = `rgba(255, 255, 255, ${(0.14 + 0.24 * k + 0.42 * k * hit).toFixed(3)})`
         ctx.fill()
         ctx.strokeStyle = '#FFFFFF'
         ctx.lineWidth = 3 + 3 * k
@@ -283,7 +304,7 @@ export class RouletteWheel {
     }
 
     // 현재 포인터가 가리키는 항목 이름 (포인터 위 실시간 표시 — 확장의 핵심 연출)
-    const current = items[this.indexAtPointer()]
+    const current = items[idx]
     const rimTop = cy - R
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
@@ -291,19 +312,40 @@ export class RouletteWheel {
     ctx.fillStyle = '#0E0808'
     ctx.fillText(current.name, cx, rimTop - 30, size * 0.8)
 
-    // 포인터 — 원판 밖 상단에서 아래를 향하는 검은 삼각형
+    // 포인터 — 원판 밖 상단에서 아래를 향하는 검은 삼각형.
+    // 돌 때는 핀을 칠 때마다 원판이 도는 쪽으로 살짝 튕겼다 돌아온다(딸깍과 같은 순간). 빠르면 기운 채로 핀을 타고 넘는다
+    const kick = this.mode === 'idle' ? 0 : Math.max(0, 1 - (now - this.pegHitAt) / 90)
+    ctx.save()
+    ctx.translate(cx, rimTop - 22)
+    ctx.rotate(-0.24 * kick)
     ctx.beginPath()
-    ctx.moveTo(cx - 11, rimTop - 22)
-    ctx.lineTo(cx + 11, rimTop - 22)
-    ctx.lineTo(cx, rimTop + 4)
+    ctx.moveTo(-11, 0)
+    ctx.lineTo(11, 0)
+    ctx.lineTo(0, 26)
     ctx.closePath()
     ctx.fillStyle = '#1C1210'
     ctx.fill()
     ctx.strokeStyle = '#FFFFFF'
     ctx.lineWidth = 1.5
     ctx.stroke()
+    ctx.restore()
 
     ctx.restore()
+  }
+
+  /** 포인터가 새 칸·새 핀 구간에 들어섰는지 — 번쩍임·튕김을 그 순간부터 센다 */
+  private trackPointer(segIdx: number, now: number): void {
+    if (segIdx !== this.segIdx) {
+      this.segIdx = segIdx
+      this.segEnteredAt = now
+    }
+    const bounds = this.syncBounds()
+    const a = (((POINTER_ANGLE - this.rotation) % TAU) + TAU) % TAU
+    const pegIdx = boundaryIndexAt(a, bounds)
+    if (pegIdx !== this.pegIdx) {
+      this.pegIdx = pegIdx
+      this.pegHitAt = now
+    }
   }
 
   /** 현재 포인터 아래에 있는 칸 인덱스 */
@@ -327,6 +369,7 @@ export class RouletteWheel {
     if (this.mode !== 'idle') return
     this.mode = 'free'
     this.freeStartAt = performance.now()
+    this.freeStartRot = this.rotation
     this.lastFrameAt = this.freeStartAt
     this.startLoop()
   }
@@ -341,6 +384,8 @@ export class RouletteWheel {
     if (winnerIndex < 0 || winnerIndex >= segs.length) return
 
     const now = performance.now()
+    // 지금 이 순간의 각도·속도에서 이어서 감속한다 (마지막 프레임 각도를 쓰면 정지 순간 한 박자 멈칫했다)
+    this.rotation = this.rotationAt(now)
     const v = this.freeVelocity(now)
     const duration = 7000 + Math.random() * 2000 // 7~9초 감속 — 시원하게 멈춘다
     // easeOutCubic의 t=0 기울기(3·range/duration)가 현재 속도 v와 같아지는 회전량
@@ -383,14 +428,11 @@ export class RouletteWheel {
   }
 
   private step(now: number): void {
-    const dt = Math.min(0.3, (now - this.lastFrameAt) / 1000)
     this.lastFrameAt = now
 
-    if (this.mode === 'free') {
-      this.rotation += this.freeVelocity(now) * dt
-    } else if (this.mode === 'stopping') {
+    this.rotation = this.rotationAt(now)
+    if (this.mode === 'stopping') {
       const t = Math.min(1, (now - this.stopStartAt) / this.stopDuration)
-      this.rotation = this.stopStartRot + (this.stopEndRot - this.stopStartRot) * easeOutCubic(t)
       if (t >= 1) {
         this.mode = 'idle'
         if (this.watchdog !== null) {

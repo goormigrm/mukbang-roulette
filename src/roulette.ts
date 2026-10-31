@@ -8,7 +8,7 @@
 
 import type { MenuItem } from './state'
 
-import { boundaryIndexAt, crossings, easeOutCubic, freeTurn, tickBoundaries, TAU } from './spin'
+import { boundaryIndexAt, crossings, easeOutCubic, freeTurn, planStop, tickBoundaries, TAU } from './spin'
 import type { Boundary } from './spin'
 const POINTER_ANGLE = -Math.PI / 2 // 12시 방향
 
@@ -388,19 +388,9 @@ export class RouletteWheel {
     this.rotation = this.rotationAt(now)
     const v = this.freeVelocity(now)
     const duration = 7000 + Math.random() * 2000 // 7~9초 감속 — 시원하게 멈춘다
-    // easeOutCubic의 t=0 기울기(3·range/duration)가 현재 속도 v와 같아지는 회전량
-    const idealRange = (v * duration) / 1000 / 3
-
-    // 당첨 칸 내부 무작위 지점(가장자리 8% 제외)
-    const { start, end } = segs[winnerIndex]
-    const target = start + (end - start) * (0.08 + Math.random() * 0.84)
-    const landing = ((POINTER_ANGLE - target) % TAU) + TAU // 그 지점이 포인터에 오는 회전값(mod TAU)
-
+    // 당첨 칸 내부 무작위 지점(가장자리 8% 제외)이 포인터에 오도록 (계산은 spin.ts planStop — 테스트로 고정)
     const startRot = this.rotation
-    // idealRange에 가장 가까운 바퀴 수로 착지점을 맞춘다
-    let range = landing - (startRot % TAU)
-    range = ((range % TAU) + TAU) % TAU
-    range += Math.max(1, Math.round((idealRange - range) / TAU)) * TAU
+    const range = planStop(startRot, v, duration, segs[winnerIndex], Math.random(), POINTER_ANGLE)
 
     this.mode = 'stopping'
     this.stopStartRot = startRot

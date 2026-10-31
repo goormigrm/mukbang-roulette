@@ -1,6 +1,6 @@
 // 회전 궤적과 경계 통과 시각(spin.ts) — 딸깍 소리·포인터 위 이름·흰 번쩍임·포인터 튕김이 같은 박자인지의 근거
 import { describe, expect, it } from 'vitest'
-import { TAU, boundaryIndexAt, crossings, easeOutCubic, freeTurn, tickBoundaries } from '../src/spin'
+import { TAU, boundaryIndexAt, crossings, easeOutCubic, freeTurn, planStop, tickBoundaries } from '../src/spin'
 
 const MAX = TAU * 3.6
 const ACCEL = 800
@@ -135,5 +135,76 @@ describe('경계 통과 시각', () => {
     expect(crossings(() => 1, 0, 1000, b, POINTER)).toEqual([])
     expect(crossings(stopRot, 500, 100, b, POINTER)).toEqual([])
     expect(crossings(stopRot, D, D + 1000, b, POINTER)).toEqual([]) // 다 멈춘 뒤
+  })
+})
+
+// ───────────────────────────────────────────────────────────────
+// 후보 200~300종 — 실제 방송에서 쌓일 수 있는 최대치. 칸이 아주 가늘어도(1칸 = 원판의 0.1%쯤)
+// 당첨 칸에 정확히 멈추고, 딸깍이 이름 바뀌는 순간과 맞는지
+describe.each([200, 250, 300])('후보 %i종', (n) => {
+  // 1~7칸이 섞인 실제 같은 분포 + 아주 큰 칸 하나
+  const weights = Array.from({ length: n }, (_, i) => ((i * 37) % 7) + 1).concat([60])
+  const segs = segsOf(weights)
+  const bounds = tickBoundaries(segs, 24)
+  const SPEED = MAX // 최고 속도에서 정지를 누른 경우
+  const D = 8000
+
+  it('모든 칸에 정확히 멈출 수 있다 — 칸 안쪽(가장자리 8% 밖)에 착지', () => {
+    for (let w = 0; w < segs.length; w++) {
+      for (const at of [0, 0.5, 0.999]) {
+        const startRot = 1.234 + w * 0.37 // 누른 순간 각도는 제각각
+        const range = planStop(startRot, SPEED, D, segs[w], at, POINTER)
+        const end = startRot + range
+        expect(segAt(segs, end)).toBe(w)
+        const a = mod(POINTER - end)
+        const span = segs[w].end - segs[w].start
+        expect(a - segs[w].start).toBeGreaterThanOrEqual(span * 0.08 - 1e-9)
+        expect(segs[w].end - a).toBeGreaterThanOrEqual(span * 0.08 - 1e-9)
+      }
+    }
+  })
+
+  it('정지 순간 덜컥이지 않는다 — 감속 첫 속도가 누른 순간 속도와 6% 안', () => {
+    for (let w = 0; w < segs.length; w += 7) {
+      const range = planStop(0.5, SPEED, D, segs[w], 0.5, POINTER)
+      const firstSpeed = (3 * range) / (D / 1000)
+      expect(Math.abs(firstSpeed - SPEED) / SPEED).toBeLessThan(0.06)
+      expect(range).toBeGreaterThan(TAU) // 적어도 한 바퀴는 더 돈다
+    }
+  })
+
+  it('딸깍 = 이름이 바뀌는 순간 — 감속 내내 칸 경계 통과와 이름 바뀜이 1:1', () => {
+    const w = Math.floor(n / 3)
+    const startRot = 2.0
+    const range = planStop(startRot, SPEED, D, segs[w], 0.4, POINTER)
+    const rot = (t: number): number => startRot + range * easeOutCubic(Math.min(1, Math.max(0, t / D)))
+    const cs = crossings(rot, 0, D, bounds, POINTER)
+    for (const c of cs) {
+      const before = segAt(segs, rot(c.at - 0.005))
+      const after = segAt(segs, rot(c.at + 0.005))
+      if (c.edge) expect(after).not.toBe(before)
+      else expect(after).toBe(before)
+    }
+    // 이름이 눈에 보이게 바뀌는 후반 절반: 훑어 센 이름 바뀜 수 = 칸 경계 딸깍 수
+    let changes = 0
+    let prev = segAt(segs, rot(D / 2))
+    for (let t = D / 2 + 0.05; t <= D; t += 0.05) {
+      const cur = segAt(segs, rot(t))
+      if (cur !== prev) changes++
+      prev = cur
+    }
+    expect(cs.filter((c) => c.edge && c.at > D / 2).length).toBe(changes)
+    // 그리고 마지막엔 당첨 칸
+    expect(segAt(segs, rot(D))).toBe(w)
+  })
+
+  it('0.12초씩 미리 예약해도 처음부터 끝까지 빠짐·겹침 없음 (자유 회전 → 감속)', () => {
+    const startRot = 0.3
+    const range = planStop(startRot, SPEED, D, segs[5], 0.5, POINTER)
+    const rot = (t: number): number => startRot + range * easeOutCubic(Math.min(1, Math.max(0, t / D)))
+    const whole = crossings(rot, 0, D, bounds, POINTER)
+    let count = 0
+    for (let t = 0; t < D; t += 120) count += crossings(rot, t, Math.min(D, t + 120), bounds, POINTER).length
+    expect(count).toBe(whole.length)
   })
 })

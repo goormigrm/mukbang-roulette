@@ -184,3 +184,71 @@ describe('후보 100종 이상', () => {
     expect(ms).toBeLessThan(3000)
   })
 })
+
+// ───────────────────────────────────────────────────────────────
+// 200·300종 둘 다 — 규칙 엔진이 개수와 상관없이 같게 동작하는지
+describe.each([200, 300])('후보 %i종 — 규칙 엔진', (n) => {
+  it('개수 그대로 쌓이고, 모든 메뉴가 뽑힐 수 있다', () => {
+    fill(n)
+    expect(s.menus).toHaveLength(n)
+    s.beginSpin()
+    for (let i = 0; i < n; i++) {
+      const spy = vi.spyOn(Math, 'random').mockReturnValue(randomFor(i))
+      expect(s.pickWinner()?.index).toBe(i)
+      spy.mockRestore()
+    }
+  })
+
+  it('한 판을 끝까지 — 리롤 금액 인상·직전 금액 유예까지, 기록에 n종 그대로', () => {
+    fill(n)
+    vi.spyOn(Math, 'random').mockReturnValue(randomFor(n - 1)) // 맨 끝 메뉴
+    s.beginSpin()
+    s.pickWinner()
+    s.finishSpin()
+    expect(s.winner?.name).toBe(`메뉴${n - 1}`)
+    s.startRerollWindow(20000, 40000)
+    don('큰손', 20000, '')
+    expect(s.beginSpin(true)).toBe(true) // 마지막 리롤권 → 4만으로
+    expect(s.effectiveRerollCost()).toBe(40000)
+    don('딜레이', 20000, '') // 직전 금액 유예
+    expect(s.rerollCredits).toBe(1)
+    s.pickWinner()
+    s.finishSpin()
+    s.confirmResult()
+    expect(s.history[0].menus).toHaveLength(n)
+    expect(s.history[0].rerollCount).toBe(1)
+  })
+
+  it('많은 메뉴 사이에서 이름 고쳐 합치기 → 되돌리기, 사이 도네는 남는다', () => {
+    fill(n)
+    const a = s.menus[n - 10]
+    const b = s.menus[3]
+    const wa = a.weight
+    const wb = b.weight
+    s.renameMenu(a.id, b.name)
+    expect(s.menus).toHaveLength(n - 1)
+    don('사이', 4000, b.name)
+    s.undo()
+    expect(s.menus).toHaveLength(n)
+    expect(s.menus[n - 10]).toBe(a)
+    expect(a.weight).toBe(wa)
+    expect(b.weight).toBe(wb + 4)
+  })
+
+  it('새로고침해도 n종·당첨·리롤 상태가 그대로', () => {
+    fill(n)
+    vi.spyOn(Math, 'random').mockReturnValue(randomFor(n >> 1))
+    s.beginSpin()
+    s.pickWinner()
+    s.finishSpin()
+    s.startRerollWindow(30000, 50000)
+    don('큰손', 30000, '')
+    vi.advanceTimersByTime(60_250)
+    const t = new Store()
+    expect(t.menus).toHaveLength(n)
+    expect(t.winner).toBe(t.menus[n >> 1])
+    expect(t.rerollCredits).toBe(1)
+    expect(t.effectiveRerollCost()).toBe(30000)
+    expect(t.nextRerollCost).toBe(50000)
+  })
+})

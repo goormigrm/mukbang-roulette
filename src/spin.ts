@@ -86,3 +86,21 @@ export function crossings(
   }
   return out.sort((x, y) => x.at - y.at)
 }
+
+/** [정지] — 지금 각도(startRot)·속도(speed, rad/s)에서 durationMs 동안 easeOutCubic으로 감속해
+ *  당첨 칸(seg) 안쪽(가장자리 8%는 빼고 at 0~1 지점)이 포인터 아래 오도록 하는 총 회전량(rad).
+ *  감속 첫 속도(3·회전량/시간)가 지금 속도와 거의 같도록(몇 % 안) 가장 가까운 바퀴 수를 고른다 — 정지 순간 덜컥이지 않게 */
+export function planStop(
+  startRot: number,
+  speed: number,
+  durationMs: number,
+  seg: { start: number; end: number },
+  at: number,
+  pointer: number,
+): number {
+  const idealRange = (speed * durationMs) / 1000 / 3
+  const target = seg.start + (seg.end - seg.start) * (0.08 + at * 0.84)
+  let range = (((pointer - target - startRot) % TAU) + TAU) % TAU
+  range += Math.max(1, Math.round((idealRange - range) / TAU)) * TAU
+  return range
+}

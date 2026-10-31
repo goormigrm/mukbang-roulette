@@ -164,6 +164,10 @@ body {
   background: var(--cream-dark);
 }
 
+.hdr-track .opt svg {
+  display: block;
+}
+
 .hdr-track .opt {
   display: grid;
   place-items: center;
@@ -272,9 +276,93 @@ body {
   flex-shrink: 0;
 }
 
+/* 리롤 카드가 룰렛 칸 오른쪽 끝에 붙도록 칸 폭(cqw)을 잰다 */
+.wheel-area {
+  container-type: inline-size;
+}
+
+/* ── 리롤 접수 현황 카드 — 룰렛 오른쪽에 따로 (원판을 조금 가려도 된다 — 사용자) ──
+   지금 금액이 가장 크고, 다음 회차 금액은 점선 아래 작게 */
+.reroll-card {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  right: calc((100% - 100cqw) / 2 + 4px); /* 룰렛 칸 오른쪽 끝에 붙인다 */
+  transform: translateY(-40%);
+  width: 196px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #fffdf9;
+  box-shadow: 4px 4px 0 var(--ink);
+  text-align: center;
+}
+
+.reroll-card .rc-head {
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--red-deep);
+}
+
+.reroll-card .rc-label {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.reroll-card .rc-price {
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1.1;
+  color: var(--red-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+.reroll-card .rc-price small {
+  margin-left: 2px;
+  font-size: 17px;
+}
+
+.reroll-card .rc-sub {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.reroll-card .rc-credits {
+  margin-top: 8px;
+  padding: 4px 0;
+  border-radius: 8px;
+  background: #e7f5ea;
+  color: #1d7a3d;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.reroll-card .rc-next {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 2px dashed #e2cfb4;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b4a12;
+}
+
+.reroll-card .rc-next b {
+  font-size: 15px;
+}
+
+.reroll-card .rc-next span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .wheel-wrap {
   position: relative;
-  width: min(100%, 640px, calc(100vh - 360px));
+  width: min(100%, 640px, calc(100vh - 340px));
 }
 
 /* 1700px보다 좁으면 안내·버튼이 더 접히므로 룰렛 아래를 더 비워 둔다 */
@@ -1710,20 +1798,7 @@ button {
 }
 
 /* 상태바의 "다음 리롤 금액" 안내 */
-.status-bar .note-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: baseline;
-  column-gap: 22px;
-  row-gap: 4px;
-}
 
-.status-bar .next-note {
-  color: #6b4a12;
-  font-size: 26px;
-  font-weight: 900;
-}
 
 /* [✅ 결과 확정] — 판을 끝내는 버튼. 다른 큰 버튼(돌리기·리롤)과 같은 크기·두께·그림자로 맞추고,
    "끝내기"라는 뜻이 드러나게 앱의 확정·수신 표시와 같은 초록으로 구분한다 */

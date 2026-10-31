@@ -56,6 +56,8 @@ const btnBack = $<HTMLButtonElement>('#btn-back')
 const elControls = $('.controls')
 const btnPause = $<HTMLButtonElement>('#btn-pause')
 const btnSound = $<HTMLButtonElement>('#btn-sound')
+const btnFull = $<HTMLButtonElement>('#btn-full')
+const elRerollCard = $('#reroll-card')
 const btnCloseEntry = $<HTMLButtonElement>('#btn-close-entry')
 const elWinnerStamp = $('#winner-stamp')
 const elWinnerDonors = $('#winner-donors')
@@ -95,6 +97,13 @@ interface Box {
 
 /** 당첨 도장이 떠 있으면 그 자리 — -8° 기울어져 있고 등장할 때 확대 애니메이션이 있으므로,
  *  지금 보이는 크기가 아니라 다 내려앉은 자리의 바깥 상자로 계산한다 */
+/** 리롤 접수 카드가 떠 있으면 그 자리 */
+function rerollCardBox(): Box | null {
+  if (elRerollCard.hidden) return null
+  const b = elRerollCard.getBoundingClientRect()
+  return b.width ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null
+}
+
 function stampBox(): Box | null {
   if (elOverlay.hidden || elWinnerStamp.hidden) return null
   const w = elWinnerStamp.offsetWidth
@@ -121,8 +130,9 @@ function placeRoundTitle(): void {
   const cv = elWheelCanvas.getBoundingClientRect()
   if (!cv.width) return
   const stamp = stampBox()
-  // 이름·화면 크기·도장 자리가 그대로면 다시 계산하지 않는다 (도네가 들어올 때마다 불리므로)
-  const sig = [el.textContent, area.width, area.top, cv.width, cv.left, stamp && Object.values(stamp).map(Math.round)].join('|')
+  const card = rerollCardBox()
+  // 이름·화면 크기·도장·리롤 카드 자리가 그대로면 다시 계산하지 않는다 (도네가 들어올 때마다 불리므로)
+  const sig = [el.textContent, area.width, area.top, cv.width, cv.left, stamp && Object.values(stamp).map(Math.round), card && Object.values(card).map(Math.round)].join('|')
   if (sig === lastTitleSig) return
   lastTitleSig = sig
 
@@ -162,7 +172,8 @@ function placeRoundTitle(): void {
   }
 
   // 도장까지 피해 보고, 그래도 안 맞으면 원판·메뉴명만 피한다
-  const rounds = stamp ? [[label, stamp], [label]] : [[label]]
+  const base = card ? [label, card] : [label] // 리롤 카드는 늘 피한다
+  const rounds = stamp ? [[...base, stamp], base] : [base]
   for (const obstacles of rounds) {
     // 3줄 안에 들어가는 자리가 없을 때를 대비해, 아무것도 덮지 않는 자리 중 줄이 가장 적은 것을 기억해 둔다
     let fewest: { font: number; width: number; lines: number } | null = null
@@ -511,37 +522,45 @@ function renderStatus(): void {
           ? `<div class="armed-banner">${ko(`🔄 리롤권 ×${store.rerollCredits} 보유 — 마지막 리롤이 최종!`)}</div>`
           : ''
       html = store.windowOpened
-        ? `<div class="big reroll-note">${ko(`🔔 리롤 접수 중 — 단일 도네 ${cost} 이상이면 리롤권 (확정 전까지)`)}</div>${noteRow(creditNote, nextRerollNote())}`
+        ? `<div class="big reroll-note">${ko(`🔔 리롤 접수 중 — 단일 도네 ${cost} 이상이면 리롤권 (확정 전까지)`)}</div>`
         : `<div class="big">${ko('🎉 당첨! 아래 버튼에서 선택하세요')}</div>${creditNote}`
       break
     }
     case 'window': {
       const remain = Math.ceil(store.countdownRemainMs / 1000)
       const pct = (store.countdownRemainMs / Math.max(1, store.countdownDurationMs)) * 100
-      const creditNote =
-        store.rerollCredits > 0
-          ? `<div class="armed-banner">${ko(`🔄 리롤권 ×${store.rerollCredits} 누적! 시간이 끝날 때까지 계속 쌓입니다`)}</div>`
-          : ''
+      // 리롤권 수·다음 회차 금액은 룰렛 오른쪽 리롤 카드에 (renderRerollCard)
       html = `
         <div class="big reroll-note"><span class="phrase">⏱ <span id="remain-sec">${remain}</span>초 안에</span> ${ko(`단일 도네 ${cost} 이상이면 리롤권 적립!`)}</div>
-        <div class="timer-track"><div class="timer-fill" id="timer-fill" style="width:${pct}%"></div></div>
-        ${noteRow(creditNote, nextRerollNote())}`
+        <div class="timer-track"><div class="timer-fill" id="timer-fill" style="width:${pct}%"></div></div>`
       break
     }
   }
   elStatusBar.innerHTML = html
 }
 
-/** 리롤권 안내와 다음 리롤 금액을 한 줄에 나란히 — 룰렛 칸 높이를 아껴 원판을 크게 둔다 */
-function noteRow(...parts: string[]): string {
-  const html = parts.join('')
-  return html ? `<div class="note-row">${html}</div>` : ''
-}
-
-/** 정해 둔 다음 리롤 금액 — 방송 화면에도 보여 시청자가 미리 준비할 수 있게 */
-function nextRerollNote(): string {
-  if (store.nextRerollCost === null) return ''
-  return `<div class="next-note">${ko(`💰 다음 리롤은 ${cheese(store.nextRerollCost)}`)}</div>`
+/** 리롤 접수 현황 카드 — 룰렛 오른쪽에 따로 띄운다. 시청자가 "지금 얼마를 쏴야 하는지"를 헷갈리지 않게
+    지금 금액을 가장 크게, 다음 회차 금액은 작게 아래로 (예전엔 다음 금액 글씨가 더 커서 그 금액을 쏴야 하는 줄 알았다) */
+let rerollCardSig = ''
+function renderRerollCard(): void {
+  const show = store.windowOpened && ['window', 'decision', 'spinning'].includes(store.phase)
+  elRerollCard.hidden = !show
+  if (!show) return
+  const sig = `${store.effectiveRerollCost()}|${store.rerollCredits}|${store.nextRerollCost}`
+  if (sig === rerollCardSig) return
+  rerollCardSig = sig
+  const credits = store.rerollCredits > 0 ? `<div class="rc-credits">🔄 리롤권 ×${store.rerollCredits}</div>` : ''
+  const next =
+    store.nextRerollCost !== null
+      ? `<div class="rc-next">다음 회차 <b>${cheese(store.nextRerollCost)}</b><span>지금 리롤권을 다 쓰면</span></div>`
+      : ''
+  elRerollCard.innerHTML =
+    `<div class="rc-head">🔔 리롤 접수 중</div>` +
+    `<div class="rc-label">지금 리롤</div>` +
+    `<div class="rc-price">${store.effectiveRerollCost().toLocaleString('ko-KR')}<small>치즈</small></div>` +
+    `<div class="rc-sub">단일 도네 이 금액 이상</div>` +
+    credits +
+    next
 }
 
 function renderButtons(): void {
@@ -782,6 +801,7 @@ function renderAll(): void {
   renderStatus()
   renderButtons()
   renderRerollBuyers()
+  renderRerollCard()
   renderBigTimer()
   renderOverlay()
   placeRoundTitle() // 도장이 뜨고 지는 것까지 본 뒤에 현판 자리를 잡는다
@@ -911,6 +931,22 @@ btnBack.addEventListener('click', async () => {
   activateTab('current') // 들어오는 메뉴를 바로 볼 수 있게
 })
 btnPause.addEventListener('click', () => store.togglePaused())
+// 전체화면 — 방송 중 크롬 탭·주소창·북마크·작업표시줄을 숨긴다. 끄기는 이 스위치나 Esc
+function renderFull(): void {
+  const on = Boolean(document.fullscreenElement)
+  btnFull.setAttribute('aria-pressed', String(on))
+  btnFull.title = on ? '전체화면 — 눌러서 끄기 (Esc도 됨)' : '전체화면 켜기 — 방송 중 크롬 탭·주소창·북마크를 숨긴다'
+}
+btnFull.addEventListener('click', () => {
+  if (document.fullscreenElement) void document.exitFullscreen()
+  else void document.documentElement.requestFullscreen().catch(() => undefined)
+})
+document.addEventListener('fullscreenchange', () => {
+  renderFull()
+  maybeReload() // 전체화면을 끄면 미뤄 둔 새 버전 적용
+})
+renderFull()
+
 btnSound.addEventListener('click', () => {
   const on = !store.settings.sound
   store.updateSettings({ sound: on })
@@ -1190,6 +1226,11 @@ function reloadForUpdate(): void {
 
 function maybeReload(): void {
   if (!updateReady) return
+  // 새로고침하면 전체화면이 풀리고(브라우저는 클릭으로만 다시 켜 준다) 방송에 크롬 창이 드러난다
+  if (document.fullscreenElement) {
+    elUpdateWhen.textContent = '— 전체화면을 끄면 적용합니다'
+    return
+  }
   if (store.phase === 'collect') {
     elUpdateWhen.textContent = '— 잠시 후 자동으로 적용합니다'
     setTimeout(reloadForUpdate, 3000)

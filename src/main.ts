@@ -191,9 +191,12 @@ function renderSound(): void {
   btnSound.title = `효과음 ${store.settings.sound ? '켜짐' : '꺼짐'} — 눌러서 ${store.settings.sound ? '끄기' : '켜기'} (단축키 M)`
 }
 
+/** 도네 반영 스위치 — 켜짐 ▶(초록) / 멈춤 ⏸(빨강, 깜빡임) */
 function renderPause(): void {
-  btnPause.textContent = store.paused ? '⏸ 도네 반영 정지됨' : '▶ 도네 반영 중'
-  btnPause.classList.toggle('paused', store.paused)
+  btnPause.setAttribute('aria-pressed', String(!store.paused))
+  btnPause.title = store.paused
+    ? '도네 반영 멈춤 — 지금 오는 도네는 메뉴에도 리롤권에도 안 들어갑니다. 눌러서 다시 받기'
+    : '도네 반영 중 — 눌러서 잠깐 멈추기'
 }
 
 function renderMenus(): void {

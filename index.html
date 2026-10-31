@@ -20,17 +20,25 @@
         <h1 class="brand-sub">먹방 룰렛</h1>
       </div>
       <div class="topbar-actions">
-        <button id="btn-sound" class="sound-toggle" type="button" aria-pressed="true" title="효과음 켜기/끄기 (단축키 M)">
-          <span class="sound-toggle-label">효과음 <kbd>M</kbd></span>
-          <span class="sound-toggle-track" aria-hidden="true">
+        <!-- 머리줄 — 스위치·상태·버튼 모두 같은 높이(40px)·같은 테두리의 알약 모양 -->
+        <button id="btn-sound" class="hdr-toggle" type="button" aria-pressed="true" title="효과음 켜기/끄기 (단축키 M)">
+          <span class="hdr-label">효과음 <kbd>M</kbd></span>
+          <span class="hdr-track" aria-hidden="true">
             <span class="opt off">🔇</span>
             <span class="opt on">🔊</span>
           </span>
         </button>
-        <button id="btn-pause" class="pause-toggle" title="도네이션 메뉴 반영 일시정지/재개"></button>
-        <span id="conn-badge" class="badge badge-off">치지직 미연결</span>
-        <button id="btn-chzzk-login" class="btn-ghost" title="공식 치지직 페이지에서 동의만 하면 연동됩니다">치지직 로그인</button>
-        <button id="btn-chzzk-logout" class="btn-ghost" title="연결 해제 및 토큰 삭제">치지직 로그아웃</button>
+        <!-- 단축키는 일부러 없다 — 잘못 눌러 멈추면 그동안 도네가 조용히 버려진다 -->
+        <button id="btn-pause" class="hdr-toggle warn-off" type="button" aria-pressed="true" title="도네 반영 켜기/끄기">
+          <span class="hdr-label">도네 반영</span>
+          <span class="hdr-track" aria-hidden="true">
+            <span class="opt off">⏸︎</span>
+            <span class="opt on">▶︎</span>
+          </span>
+        </button>
+        <span id="conn-badge" class="hdr-pill badge badge-off">치지직 미연결</span>
+        <button id="btn-chzzk-login" class="hdr-pill hdr-btn" title="공식 치지직 페이지에서 동의만 하면 연동됩니다">치지직 로그인</button>
+        <button id="btn-chzzk-logout" class="hdr-pill hdr-btn" title="연결 해제 및 토큰 삭제">치지직 로그아웃</button>
       </div>
     </header>
 

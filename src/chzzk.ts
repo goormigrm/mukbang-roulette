@@ -4,7 +4,7 @@
 
 import io from 'socket.io-client'
 import type { ChzzkSocket } from 'socket.io-client'
-import { store } from './state'
+import { cheese, store } from './state'
 
 const DIRECT_API = 'https://openapi.chzzk.naver.com'
 const LS_TOKEN = 'mr:chzzk-token'
@@ -250,7 +250,7 @@ function openSocket(url: string): void {
     const key = `${d.donatorChannelId ?? nick}|${amount}|${text}`
     const last = recentDonations.get(key)
     if (last !== undefined && now - last < DEDUPE_MS) {
-      store.addFeed('skip', `[${nick}] ${amount.toLocaleString('ko-KR')}원 — 1초 내 동일 이벤트 중복 수신, 무시`)
+      store.addFeed('skip', `[${nick}] ${cheese(amount)} — 1초 내 동일 이벤트 중복 수신, 무시`)
       store.emitChange()
       return
     }

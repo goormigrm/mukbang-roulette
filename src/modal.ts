@@ -2,6 +2,7 @@
 // 브라우저 기본 prompt/alert는 방송 화면에 그대로 찍히면 볼품이 없어서, 금액 입력은 이 창으로 받는다.
 // 금액 칸은 여러 개를 둘 수 있다 (예: 이번 리롤 금액 + 다음 리롤 금액).
 
+import { cheese } from './state'
 import { koPhrases } from './text'
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string): T => document.querySelector(sel) as T
@@ -61,16 +62,14 @@ export function isOpen(): boolean {
   return !backdrop.hidden
 }
 
-const won = (n: number): string => `${n.toLocaleString('ko-KR')}원`
-
 /** 버튼에 쓰는 짧은 표기 — 20000 → "2만" (딱 떨어지지 않으면 원 단위 그대로) */
 function shortWon(n: number): string {
-  return n >= 10000 && n % 10000 === 0 ? `${n / 10000}만` : won(n)
+  return n >= 10000 && n % 10000 === 0 ? `${n / 10000}만` : cheese(n)
 }
 
-/** 쉼표·"원"·공백은 물론 "2만", "20000" 모두 받아준다 */
+/** 쉼표·"치즈"·"원"·공백은 물론 "2만", "20000" 모두 받아준다 */
 function parseAmount(raw: string): number | null {
-  const t = raw.replace(/[,\s원]/g, '').trim()
+  const t = raw.replace(/치즈|[,\s원]/g, '').trim()
   if (!t) return null
   const man = /^(\d+(?:\.\d+)?)만$/.exec(t)
   if (man) return Math.round(Number(man[1]) * 10000)
@@ -138,7 +137,7 @@ function buildField(f: AmountField, i: number): HTMLInputElement {
   if (f.optional) input.placeholder = f.laterText ?? '비워 두기'
   const unit = document.createElement('span')
   unit.className = 'modal-unit'
-  unit.textContent = '원'
+  unit.textContent = '치즈'
   row.append(input, unit)
   wrap.append(label, row)
 
@@ -158,7 +157,7 @@ function buildField(f: AmountField, i: number): HTMLInputElement {
     b.type = 'button'
     b.className = 'modal-preset'
     b.textContent = shortWon(p)
-    b.title = won(p)
+    b.title = cheese(p)
     b.dataset.v = String(p)
     b.addEventListener('click', () => {
       input.value = String(p)
@@ -234,7 +233,7 @@ export function askAmounts(opts: AmountDialogOptions): Promise<AmountDialogResul
         }
         const n = parseAmount(raw)
         if (n === null) return showError(`${f.label} — 숫자로 적어주세요 (예: 40000 또는 4만)`, inputs[i])
-        if (n < f.min) return showError(`${f.label} — ${won(f.min)} 이상이어야 합니다`, inputs[i])
+        if (n < f.min) return showError(`${f.label} — ${cheese(f.min)} 이상이어야 합니다`, inputs[i])
         values.push(n)
       }
       close(values)

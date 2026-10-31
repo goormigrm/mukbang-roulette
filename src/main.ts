@@ -1,5 +1,5 @@
 import './styles.css'
-import { REROLL_PRESETS, store, suggestNextRerollCost } from './state'
+import { REROLL_PRESETS, cheese, store, suggestNextRerollCost } from './state'
 import type { AppliedDonation, MenuItem, Round } from './state'
 import { MIN_SPIN_MS, RouletteWheel, segColor } from './roulette'
 import * as sound from './sound'
@@ -437,13 +437,13 @@ function renderHistory(): void {
 
 function renderStatus(): void {
   const s = store.settings
-  const cost = store.effectiveRerollCost().toLocaleString('ko-KR')
+  const cost = cheese(store.effectiveRerollCost())
   let html = ''
   switch (store.phase) {
     case 'collect':
       html = store.confirmedWinner
         ? `<div class="big"><span class="phrase">오늘의 메뉴:</span> <span class="phrase"><b>${escapeHtml(store.confirmedWinner)}</b> 🎉</span></div>`
-        : `<div class="muted">${ko(`도네이션 ${s.wonPerSlot.toLocaleString('ko-KR')}원당 1칸 · 후보가 들어오면 돌릴 수 있어요`)}</div>`
+        : `<div class="muted">${ko(`도네이션 ${cheese(s.wonPerSlot)}당 1칸 · 후보가 들어오면 돌릴 수 있어요`)}</div>`
       break
     case 'closing': {
       const remain = Math.ceil(store.countdownRemainMs / 1000)
@@ -465,7 +465,7 @@ function renderStatus(): void {
     case 'spinning': {
       // 리롤 접수가 열려 있으면 돌아가는 동안에도 "다음 리롤" 도네를 받는다는 걸 알려 준다
       const openNote = store.windowOpened
-        ? `<div class="muted small-text">${ko(`🔔 돌아가는 동안에도 ${cost}원 이상 리롤 도네를 받습니다`)}</div>`
+        ? `<div class="muted small-text">${ko(`🔔 돌아가는 동안에도 ${cost} 이상 리롤 도네를 받습니다`)}</div>`
         : ''
       html = wheel.isStopping
         ? `<div class="big reroll-note">두구두구두구... 🥁</div>${openNote}`
@@ -478,7 +478,7 @@ function renderStatus(): void {
           ? `<div class="armed-banner">${ko(`🔄 리롤권 ×${store.rerollCredits} 보유 — 마지막 리롤이 최종!`)}</div>`
           : ''
       html = store.windowOpened
-        ? `<div class="big reroll-note">${ko(`🔔 리롤 접수 중 — 단일 도네 ${cost}원 이상이면 리롤권 (확정 전까지)`)}</div>${noteRow(creditNote, nextRerollNote())}`
+        ? `<div class="big reroll-note">${ko(`🔔 리롤 접수 중 — 단일 도네 ${cost} 이상이면 리롤권 (확정 전까지)`)}</div>${noteRow(creditNote, nextRerollNote())}`
         : `<div class="big">${ko('🎉 당첨! 아래 버튼에서 선택하세요')}</div>${creditNote}`
       break
     }
@@ -490,7 +490,7 @@ function renderStatus(): void {
           ? `<div class="armed-banner">${ko(`🔄 리롤권 ×${store.rerollCredits} 누적! 시간이 끝날 때까지 계속 쌓입니다`)}</div>`
           : ''
       html = `
-        <div class="big reroll-note"><span class="phrase">⏱ <span id="remain-sec">${remain}</span>초 안에</span> ${ko(`단일 도네 ${cost}원 이상이면 리롤권 적립!`)}</div>
+        <div class="big reroll-note"><span class="phrase">⏱ <span id="remain-sec">${remain}</span>초 안에</span> ${ko(`단일 도네 ${cost} 이상이면 리롤권 적립!`)}</div>
         <div class="timer-track"><div class="timer-fill" id="timer-fill" style="width:${pct}%"></div></div>
         ${noteRow(creditNote, nextRerollNote())}`
       break
@@ -508,7 +508,7 @@ function noteRow(...parts: string[]): string {
 /** 정해 둔 다음 리롤 금액 — 방송 화면에도 보여 시청자가 미리 준비할 수 있게 */
 function nextRerollNote(): string {
   if (store.nextRerollCost === null) return ''
-  return `<div class="next-note">${ko(`💰 다음 리롤은 ${store.nextRerollCost.toLocaleString('ko-KR')}원`)}</div>`
+  return `<div class="next-note">${ko(`💰 다음 리롤은 ${cheese(store.nextRerollCost)}`)}</div>`
 }
 
 function renderButtons(): void {
@@ -848,7 +848,7 @@ async function doReroll(): Promise<void> {
       fields: [{ label: '다음 리롤 금액', value: suggestNextRerollCost(cur), min: 1000, presets: REROLL_PRESETS }],
       confirmText: '정하고 돌리기',
       skipText: '다음 없이 돌리기',
-      note: [`지금 리롤 금액은 ${cur.toLocaleString('ko-KR')}원입니다.`, '[다음 없이 돌리기]는 이번 리롤이 마지막입니다.'],
+      note: [`지금 리롤 금액은 ${cheese(cur)}입니다.`, '[다음 없이 돌리기]는 이번 리롤이 마지막입니다.'],
     })
     if (r === null) return // 취소 — 돌리지 않는다
     if (r === 'skip') store.endRerollSales()

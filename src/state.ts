@@ -94,6 +94,11 @@ export function menuKey(raw: string): string {
 
 // ---- 리롤 금액 ----
 /** 금액 입력 창에 늘 띄워 두는 빠른 선택 버튼 (사용자 지정: 2만 3만 4만 5만 10만) */
+/** 화면에 쓰는 금액 — 치지직 후원 단위인 "치즈"로 (1치즈 = 1원). 금액은 모두 이 함수로 적는다 */
+export function cheese(n: number): string {
+  return `${n.toLocaleString('ko-KR')}치즈`
+}
+
 export const REROLL_PRESETS = [20000, 30000, 40000, 50000, 100000]
 
 /** 다음 리롤 금액 추천 — 지금 금액의 두 배 이상인 가장 작은 버튼 값(없으면 두 배).
@@ -499,16 +504,16 @@ export class Store {
   }
 
   private routeDonation(d: DonationInput): void {
-    const won = d.amount.toLocaleString('ko-KR')
+    const amt = cheese(d.amount)
 
     if (d.isVideo) {
-      this.addFeed('skip', `🎬 [${d.nick}] ${won}원 영상 도네 — 규칙상 제외`)
+      this.addFeed('skip', `🎬 [${d.nick}] ${amt} 영상 도네 — 규칙상 제외`)
       return
     }
 
     // 일시정지 중에는 메뉴 추가뿐 아니라 리롤권 적립도 하지 않는다
     if (this.paused) {
-      this.addFeed('skip', `⏸ [${d.nick}] ${won}원 "${d.message}" — 일시정지 중, 반영 안 됨`)
+      this.addFeed('skip', `⏸ [${d.nick}] ${amt} "${d.message}" — 일시정지 중, 반영 안 됨`)
       return
     }
 
@@ -529,7 +534,7 @@ export class Store {
       const old = d.amount < this.effectiveRerollCost() ? ' · 올리기 직전 금액으로 도착, 인정' : ''
       this.rerollCredits++
       this.rerollUsers.push(d.nick)
-      this.addFeed('reroll', `🔄 [${d.nick}] ${won}원 — 리롤권 +1 (보유 ${this.rerollCredits}개)${when}${old}`)
+      this.addFeed('reroll', `🔄 [${d.nick}] ${amt} — 리롤권 +1 (보유 ${this.rerollCredits}개)${when}${old}`)
       this.emit('armed', d.nick)
       return
     }
@@ -538,7 +543,7 @@ export class Store {
     if (rerollEligible) {
       this.addFeed(
         'skip',
-        `[${d.nick}] ${won}원 — 리롤 비용(${this.effectiveRerollCost().toLocaleString('ko-KR')}원) 미만이라 반영 안 됨`,
+        `[${d.nick}] ${amt} — 리롤 비용(${cheese(this.effectiveRerollCost())}) 미만이라 반영 안 됨`,
       )
       return
     }
@@ -549,7 +554,7 @@ export class Store {
     let buzzer = false
     if (this.phase === 'closed') {
       if (!this.inGrace()) {
-        this.addFeed('skip', `[${d.nick}] ${won}원 "${d.message.trim()}" — 마감 후 도착, 반영 안 됨 (필요하면 직접 추가)`)
+        this.addFeed('skip', `[${d.nick}] ${amt} "${d.message.trim()}" — 마감 후 도착, 반영 안 됨 (필요하면 직접 추가)`)
         return
       }
       buzzer = true
@@ -557,18 +562,18 @@ export class Store {
 
     // 스핀 중 도네는 전부 무시
     if (this.phase === 'spinning') {
-      this.addFeed('skip', `[${d.nick}] ${won}원 — 스핀 중에는 반영하지 않습니다`)
+      this.addFeed('skip', `[${d.nick}] ${amt} — 스핀 중에는 반영하지 않습니다`)
       return
     }
 
     // 당첨 발표 후 접수를 열기 전 상태도 전부 무시 (확정 후 다음 판 모집부터 반영)
     if (this.phase === 'decision') {
-      this.addFeed('skip', `[${d.nick}] ${won}원 — 당첨 발표 대기 중: 반영 안 됨 (다음 판은 확정 후부터)`)
+      this.addFeed('skip', `[${d.nick}] ${amt} — 당첨 발표 대기 중: 반영 안 됨 (다음 판은 확정 후부터)`)
       return
     }
 
     if (d.amount < this.settings.minAmount) {
-      this.addFeed('skip', `[${d.nick}] ${won}원 — 최소 금액(${this.settings.minAmount.toLocaleString('ko-KR')}원) 미만`)
+      this.addFeed('skip', `[${d.nick}] ${amt} — 최소 금액(${cheese(this.settings.minAmount)}) 미만`)
       return
     }
 
@@ -592,7 +597,7 @@ export class Store {
     const merged = existing && name !== asked ? ` (="${asked}")` : ''
     this.addFeed(
       'add',
-      `${buzzer ? '⏰ 버저비터! ' : ''}🍜 [${d.nick}] ${d.amount.toLocaleString('ko-KR')}원 → "${name}"${merged} ×${slots}`,
+      `${buzzer ? '⏰ 버저비터! ' : ''}🍜 [${d.nick}] ${cheese(d.amount)} → "${name}"${merged} ×${slots}`,
     )
     this.emit('donation', { nick: d.nick, amount: d.amount, name, slots } satisfies AppliedDonation)
   }
@@ -626,7 +631,7 @@ export class Store {
         this.nextRerollCost = null
         this.addFeed(
           'reroll',
-          `💰 다음 리롤 접수 — 지금부터 단일 도네 ${this.effectiveRerollCost().toLocaleString('ko-KR')}원 이상 (돌아가는 동안에도 인정)`,
+          `💰 다음 리롤 접수 — 지금부터 단일 도네 ${cheese(this.effectiveRerollCost())} 이상 (돌아가는 동안에도 인정)`,
         )
       }
     } else if (this.phase === 'closing' || this.phase === 'closed') {
@@ -704,10 +709,10 @@ export class Store {
     if (next !== undefined) this.nextRerollCost = validCost(next)
     this.phase = 'window'
     this.windowOpened = true
-    const nextNote = this.nextRerollCost ? ` · 다음 리롤 ${this.nextRerollCost.toLocaleString('ko-KR')}원` : ''
+    const nextNote = this.nextRerollCost ? ` · 다음 리롤 ${cheese(this.nextRerollCost)}` : ''
     this.addFeed(
       'reroll',
-      `🔔 리롤 도네 접수 시작! ${this.settings.rerollWindowSec}초 안에 단일 도네 ${this.effectiveRerollCost().toLocaleString('ko-KR')}원 이상${nextNote}`,
+      `🔔 리롤 도네 접수 시작! ${this.settings.rerollWindowSec}초 안에 단일 도네 ${cheese(this.effectiveRerollCost())} 이상${nextNote}`,
     )
     this.startCountdown(Date.now() + sec * 1000, sec * 1000)
     this.changed()
@@ -717,7 +722,7 @@ export class Store {
   setNextRerollCost(cost: number | null): void {
     this.nextRerollCost = validCost(cost)
     if (this.nextRerollCost) {
-      this.addFeed('reroll', `💰 다음 리롤 금액: ${this.nextRerollCost.toLocaleString('ko-KR')}원`)
+      this.addFeed('reroll', `💰 다음 리롤 금액: ${cheese(this.nextRerollCost)}`)
     }
     this.changed()
   }

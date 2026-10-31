@@ -7,6 +7,7 @@ import {
   Store,
   UNDO_MS,
   canonicalMenuName,
+  cheese,
   menuKey,
   suggestNextRerollCost,
 } from '../src/state'
@@ -81,6 +82,47 @@ describe('메뉴 이름 정리 (순수 함수)', () => {
     expect(suggestNextRerollCost(40000)).toBe(100000)
     expect(suggestNextRerollCost(50000)).toBe(100000)
     expect(suggestNextRerollCost(100000)).toBe(200000)
+  })
+})
+
+// ───────────────────────────────────────────────────────────────
+describe('금액 표시 단위 — 치즈 (원 아님)', () => {
+  it('cheese(): 쉼표를 찍고 "치즈"를 붙인다', () => {
+    expect(cheese(1000)).toBe('1,000치즈')
+    expect(cheese(20000)).toBe('20,000치즈')
+    expect(cheese(1_000_000)).toBe('1,000,000치즈')
+    expect(cheese(0)).toBe('0치즈')
+  })
+  it('피드에 남는 모든 금액이 치즈로 적힌다 — 원으로 적힌 줄이 하나도 없다', () => {
+    s.addMenu('김밥', 1)
+    don('영상', 5000, '짬뽕', true) // 영상 제외
+    s.togglePaused()
+    don('정지중', 5000, '짬뽕') // 일시정지
+    s.togglePaused()
+    don('소액', 999, '짬뽕') // 최소 금액 미만
+    don('A', 3000, '부대 찌개') // 메뉴 추가
+    don('B', 2000, '부대찌개') // 합치기
+    s.startClosing(10)
+    vi.advanceTimersByTime(10_250)
+    don('버저', 2000, '탕수육') // 버저비터
+    vi.advanceTimersByTime(5_100)
+    don('늦음', 2000, '라면') // 마감 후
+    spinTo(0)
+    don('대기', 3000, '라면') // 당첨 발표 대기
+    s.startRerollWindow(20000, 40000) // 접수 시작 + 다음 금액
+    s.setNextRerollCost(40000)
+    don('큰손', 20000) // 리롤권
+    don('작은손', 10000) // 미만
+    s.beginSpin(true) // 금액 인상
+    don('딜레이', 20000) // 직전 금액 유예
+    don('스핀', 1000, '라면') // 도는 중
+    const amounts = s.feed.map((f) => f.text).filter((t) => /\d[\d,]*(원|치즈)/.test(t))
+    expect(amounts.length).toBeGreaterThanOrEqual(15)
+    for (const t of s.feed.map((f) => f.text)) expect(t).not.toMatch(/\d원/)
+    const all = s.feed.map((f) => f.text).join('\n')
+    for (const want of ['5,000치즈', '999치즈', '1,000치즈', '20,000치즈', '40,000치즈', '10,000치즈']) {
+      expect(all).toContain(want)
+    }
   })
 })
 

@@ -573,30 +573,56 @@ describe('결과 확정 · 기록', () => {
 
 // ───────────────────────────────────────────────────────────────
 describe('리롤 금액 미리 정하기 (첫 돌리기 전)', () => {
-  it('모집 중에 정하면 당첨 발표 뒤 접수가 그 금액으로 열린다', () => {
+  it('미리 정했으면 첫 정지 뒤 당첨 발표에서 버튼 없이 리롤권이 생긴다 (사용자 발견 버그)', () => {
     s.addMenu('짬뽕', 5, '가')
     s.addMenu('짜장', 3, '나')
     s.presetRerollCosts(30000, 50000)
     expect(lastFeed()).toContain('30,000치즈')
     spinTo(0)
-    expect(s.effectiveRerollCost()).toBe(30000)
-    expect(s.nextRerollCost).toBe(50000)
-    s.startRerollWindow() // [리롤 도네 받기]에서 금액을 안 바꾸고 바로 시작한 것과 같다
-    don('A', 20000)
+    expect(s.phase).toBe('decision')
+    expect(s.windowOpened).toBe(true)
+    don('A', 20000) // 미달
     expect(s.rerollCredits).toBe(0)
-    don('B', 30000)
+    don('B', 30000) // [리롤 도네 받기]를 안 눌렀어도 인정
     expect(s.rerollCredits).toBe(1)
-    spinTo(0, true) // 마지막 리롤권 → 미리 정한 다음 금액으로
+    expect(lastFeed()).toContain('확정 전 도착분 인정')
+    spinTo(0, true) // 마지막 리롤권 → 미리 정한 다음 금액으로 바로 이어서
     expect(s.effectiveRerollCost()).toBe(50000)
+    don('C', 50000)
+    expect(s.rerollCredits).toBe(1)
   })
-  it('미리 정해도 접수는 당첨 발표 뒤 — 모집 중 큰 도네는 메뉴, 첫 스핀 중 도네는 무시', () => {
+  it('모집 중 큰 도네는 그대로 메뉴, 돌기 시작하면(정지 전 포함) 리롤권', () => {
     s.presetRerollCosts(20000, null)
     don('A', 20000, '마라탕')
     expect(menu('마라탕').weight).toBe(20)
-    s.beginSpin()
-    don('B', 20000)
-    expect(s.rerollCredits).toBe(0)
     expect(s.windowOpened).toBe(false)
+    s.beginSpin()
+    expect(s.windowOpened).toBe(true)
+    don('B', 20000)
+    expect(s.rerollCredits).toBe(1)
+    expect(lastFeed()).toContain('돌아가는 동안 미리 접수')
+    don('C', 10000, '짜장') // 미달 — 메뉴로도 안 들어간다
+    expect(s.rerollCredits).toBe(1)
+    expect(names()).not.toContain('짜장')
+  })
+  it('미리 안 정했으면 예전처럼 첫 스핀·당첨 발표 중 도네는 무시 ([리롤 도네 받기]를 눌러야 접수)', () => {
+    toDecision()
+    expect(s.windowOpened).toBe(false)
+    don('A', 20000)
+    expect(s.rerollCredits).toBe(0)
+  })
+  it('미리 정한 접수 중에 [리롤 재접수]로 금액을 바꾸고 60초를 열어도 쌓인 리롤권은 그대로', () => {
+    s.addMenu('짬뽕', 5, '가')
+    s.presetRerollCosts(20000, null)
+    spinTo(0)
+    don('A', 20000)
+    s.startRerollWindow(30000, null)
+    expect(s.phase).toBe('window')
+    expect(s.rerollCredits).toBe(1)
+    don('B', 20000)
+    expect(s.rerollCredits).toBe(1)
+    don('C', 30000)
+    expect(s.rerollCredits).toBe(2)
   })
   it('마감 카운트다운 중에도 정할 수 있고, 돌기 시작한 뒤·당첨 발표 뒤에는 이 방법으로 못 바꾼다', () => {
     s.addMenu('짬뽕', 5, '가')

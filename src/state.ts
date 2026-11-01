@@ -613,6 +613,7 @@ export class Store {
    *  당첨 발표 후에도 리롤 도네 없이 그냥 다시 돌릴 수 있다 ("3번 돌려서 나온 걸로" 운영) */
   beginSpin(useCredit = false): boolean {
     if (this.menus.length < 1 || this.phase === 'spinning') return false
+    const firstSpin = this.phase === 'collect' || this.phase === 'closing' || this.phase === 'closed'
 
     if (useCredit) {
       if (this.rerollCredits < 1 || (this.phase !== 'decision' && this.phase !== 'window')) {
@@ -647,6 +648,17 @@ export class Store {
       // 당첨 발표/리롤 대기 상태에서의 자유 재돌리기 — 이전 결과는 기록하지 않고 무시
       this.stopCountdown()
       this.addFeed('info', '🔁 다시 돌리기 — 이전 결과를 무시하고 새로 돌립니다')
+    }
+
+    // 첫 돌리기 전에 리롤 금액을 정해 뒀으면 돌기 시작하는 순간 접수가 열린다 — 한 번 연 접수처럼
+    // 확정 전까지(돌아가는 동안·당첨 발표 뒤에도) [리롤 도네 받기]를 누르지 않아도 리롤권이 쌓인다
+    if (firstSpin && this.currentRerollCost !== null && !this.windowOpened) {
+      this.windowOpened = true
+      const nextNote = this.nextRerollCost ? ` · 다음 리롤 ${cheese(this.nextRerollCost)}` : ''
+      this.addFeed(
+        'reroll',
+        `🔔 리롤 접수 시작 — 단일 도네 ${cheese(this.effectiveRerollCost())} 이상이면 리롤권 (미리 정한 금액, 돌아가는 동안에도 인정)${nextNote}`,
+      )
     }
 
     this.stopGrace()
@@ -725,7 +737,7 @@ export class Store {
   }
 
   /** [🔔 리롤 금액] — 첫 돌리기 전(모집·마감 중)에 이번 판 리롤 금액을 미리 정해 둔다 (철면수심 님 요청 2026-11-01).
-   *  접수는 그대로 당첨 발표 뒤 [리롤 도네 받기]로 열고, 그 창에 이 금액이 미리 채워진다.
+   *  모집 중에는 메뉴만 받고, 돌리기 시작하는 순간 이 금액으로 리롤 접수가 열린다(beginSpin).
    *  next: 다음 회차 금액, null이면 마지막 리롤권을 쓸 때 정한다 */
   presetRerollCosts(cost: number, next: number | null): void {
     if (this.phase !== 'collect' && this.phase !== 'closing' && this.phase !== 'closed') return
@@ -734,7 +746,7 @@ export class Store {
     this.currentRerollCost = c
     this.nextRerollCost = validCost(next)
     const nextNote = this.nextRerollCost ? ` · 다음 리롤 ${cheese(this.nextRerollCost)}` : ''
-    this.addFeed('reroll', `💰 이번 판 리롤 금액: ${cheese(c)}${nextNote} — 당첨 발표 뒤 접수`)
+    this.addFeed('reroll', `💰 이번 판 리롤 금액: ${cheese(c)}${nextNote} — 돌리기 시작하면 접수`)
     this.changed()
   }
 

@@ -19,32 +19,18 @@ node capture.mjs celebration.gif
 
 > 결과 GIF는 용량이 커서 저장소에 커밋하지 않는다(`.gitignore`). 필요할 때 다시 뽑아 쓴다.
 
-## 공지용 화면 사진 (shot.mjs)
-
-```bash
-npm run dev            # 다른 창에서 개발 서버
-cd tools/capture-gif
-node shot.mjs          # 기본 http://localhost:5173/mukbang-roulette/
-```
-
-`docs/patch-<날짜>-round-title.png`(당첨 발표 + 룰렛 이름 현판)과
-`docs/patch-<날짜>-reroll-next.png`([리롤 도네 받기] 창 — 이번 금액 + 다음 금액) 두 장을 찍는다.
-
-- **배포본이 아니라 개발 서버**를 쓴다 — 상태를 만들려면 `window.__store`(dev 전용)가 필요하다.
-- 추첨만 끼워 넣으면 포인터가 가리키는 칸과 당첨 메뉴가 어긋나 찍힌다(조작처럼 보인다).
-  그래서 버튼을 눌러 **실제로 돌리고 감속까지 끝난** 결과를 찍는다 — 한 판에 10초쯤 걸린다.
-- 찍기 전에 애니메이션을 끝 상태로 보낸다. 깜빡임처럼 끝이 없는 것은 멈춰만 둔다
-  (그냥 찍으면 도장이 2.6배로 커진 중간 프레임이 나온다).
-- 당첨 뒤 4초를 기다려 폭죽·색종이가 걷힌 뒤에 찍는다.
-
 ## 화면 배치 측정 (measure.mjs · phase.mjs)
 
 `npm run dev`를 띄운 뒤 `node measure.mjs` — 1920×920/1080/1120 창에서 후보가 몇 줄 보이는지, 룰렛 크기,
 페이지 스크롤, 좌우 여백을 잰다. `node phase.mjs` — 모집·당첨 발표·리롤 접수 단계마다 룰렛 칸 안에 버튼까지
 다 들어가는지(넘침 px) 잰다. 레이아웃을 손볼 때 전후를 숫자로 비교하는 용도.
 
-## 공지 5차 움짤 (patch-gifs.mjs)
+## 공지 움짤 (patch-gifs.mjs)
 
-`npm run dev`를 띄운 뒤 `node patch-gifs.mjs` — `docs/patch-2026-10-31-{reroll,stop,menus}.gif` 세 장.
-1920×920 창에서 찍고 필요한 칸만 잘라 담는다(룰렛 칸 / 룰렛 위쪽 / 후보+피드 칸).
-녹화·인코딩은 `gif.mjs`(capture.mjs와 공용). 찍은 뒤에는 브라우저에서 재생해 장면이 의도대로인지 꼭 본다.
+`npm run dev`를 띄운 뒤 `node patch-gifs.mjs` — `docs/patch-2026-10-31-{menus,reroll,roulette}.gif` 세 장(6차 공지).
+**화면 전체 1920×1280, 한 장 5초** — 잘라 담지 않는다(사용자 기준). 다음 공지 때는 장면(`record(...)` 블록)만 바꿔 쓴다.
+`record()`는 처음 5초를 담고, `tail`이면 끝 5초(룰렛이 멈추는 장면처럼 끝이 중요한 것)를 담는다.
+
+녹화·인코딩은 `gif.mjs`(capture.mjs와 공용). 화면 전체라 프레임마다 **앞 프레임과 같은 픽셀은 투명**으로 남겨
+바뀐 곳만 담는다 — 그래도 9MB를 넘으면 색 수 → 프레임 간격 순으로 줄인다(룰렛 장면은 112색 · 초당 20장 정도).
+찍은 뒤에는 꼭 GIF를 다시 풀어 장면이 의도대로인지 본다.

@@ -65,21 +65,24 @@
       <section class="wheel-area frame">
         <!-- 룰렛 이름 현판 — 프레임 오른쪽 위 빈 곳에 앉고, 길이에 맞춰 크기·줄 수를 main.ts가 고른다 -->
         <div id="round-title-display" class="round-title-display" hidden></div>
-        <div class="wheel-wrap">
-          <canvas id="wheel"></canvas>
-          <div id="winner-overlay" class="winner-overlay" hidden>
-            <div class="stamp" id="winner-stamp">
-              <span class="stamp-label">오늘의 메뉴</span>
-              <span id="winner-name"></span>
-              <span id="winner-chance" class="winner-chance" hidden></span>
-              <span id="winner-donors" class="winner-donors" hidden></span>
+        <!-- 룰렛은 아래 안내·버튼을 뺀 남은 자리를 다 쓴다 (가로·세로 중 짧은 쪽에 맞춘 정사각형) -->
+        <div class="wheel-box">
+          <div class="wheel-wrap">
+            <canvas id="wheel"></canvas>
+            <div id="winner-overlay" class="winner-overlay" hidden>
+              <div class="stamp" id="winner-stamp">
+                <span class="stamp-label">오늘의 메뉴</span>
+                <span id="winner-name"></span>
+                <span id="winner-chance" class="winner-chance" hidden></span>
+                <span id="winner-donors" class="winner-donors" hidden></span>
+              </div>
+              <div id="big-timer" class="big-timer" hidden></div>
+              <div id="reroll-buyers" class="reroll-buyers" hidden></div>
             </div>
-            <div id="big-timer" class="big-timer" hidden></div>
-            <div id="reroll-buyers" class="reroll-buyers" hidden></div>
+            <div id="toast-area" class="toast-area"></div>
+            <!-- 리롤 접수 현황 — 룰렛 오른쪽에 따로. 지금 살 수 있는 금액이 가장 크다 (main.ts renderRerollCard) -->
+            <div id="reroll-card" class="reroll-card" hidden></div>
           </div>
-          <div id="toast-area" class="toast-area"></div>
-          <!-- 리롤 접수 현황 — 룰렛 오른쪽에 따로. 지금 살 수 있는 금액이 가장 크다 (main.ts renderRerollCard) -->
-          <div id="reroll-card" class="reroll-card" hidden></div>
         </div>
         <div id="status-bar" class="status-bar"></div>
         <div class="controls">

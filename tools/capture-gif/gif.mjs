@@ -48,14 +48,15 @@ function decode(shot, clip) {
 /** 프레임들 → GIF 파일. clip({x,y,width,height}, 스크린캐스트 픽셀)이 있으면 그 부분만 담는다.
  *  until(ts)을 주면 마지막 프레임을 그때까지 보여 준다 — 스크린캐스트는 화면이 안 바뀌면 프레임을 안 보내므로 길이를 맞추려면 필요 */
 export function writeGif(shots, out, { clip, until, budget = 9_000_000 } = {}) {
-  const encode = (colors, stride) => {
-    // GIF 지연은 1/100초 단위이고 2칸(20ms)보다 짧으면 브라우저가 느리게 틀어 길이가 늘어난다 — 20ms 안에 온 프레임은 건너뛴다
+  const encode = (colors, gap) => {
+    // 앞 프레임에서 gap(ms) 안에 온 프레임은 건너뛴다 — 초당 장수를 고르게 줄이는 손잡이.
+    // GIF 지연은 1/100초 단위이고 2칸(20ms)보다 짧으면 브라우저가 느리게 틀어 길이가 늘어나므로 최소 20ms
     const idx = []
-    for (let i = 0; i < shots.length; i += stride) if (!idx.length || shots[i].ts - shots[idx.at(-1)].ts >= 20) idx.push(i)
+    for (let i = 0; i < shots.length; i++) if (!idx.length || shots[i].ts - shots[idx.at(-1)].ts >= gap) idx.push(i)
     const t0 = shots[0].ts
     const cs = (ts) => Math.round((ts - t0) / 10) * 10 // 누적 시각을 반올림해 프레임마다 생기는 오차가 쌓이지 않게
-    // 장면이 바뀌는 GIF도 있으니 고르게 6장을 골라 팔레트를 만든다 (맨 끝 1칸은 투명용으로 비워 둔다)
-    const picks = [0, 0.2, 0.4, 0.6, 0.8, 0.98].map((p) => idx[Math.min(idx.length - 1, Math.floor(idx.length * p))])
+    // 장면이 바뀌는 GIF도 있으니 고르게 8장을 골라 팔레트를 만든다 (맨 끝 1칸은 투명용으로 비워 둔다)
+    const picks = [0, 0.14, 0.28, 0.42, 0.56, 0.7, 0.84, 0.98].map((p) => idx[Math.min(idx.length - 1, Math.floor(idx.length * p))])
     const frames = picks.map((fi) => decode(shots[fi], clip))
     const { W, H } = frames[0]
     const sample = new Uint8ClampedArray(W * H * 4 * frames.length)
@@ -76,7 +77,7 @@ export function writeGif(shots, out, { clip, until, budget = 9_000_000 } = {}) {
         for (let i = 0; i < cur.length; i++) if (cur[i] === prev[i]) frame[i] = T
       }
       // 프레임 사이 실제 간격 그대로 — 화면이 멈춰 있던 시간도 그만큼 보여야 영상 길이가 맞는다
-      const nextTs = shots[idx[k + 1]]?.ts ?? until ?? shots[fi].ts + 40 * stride
+      const nextTs = shots[idx[k + 1]]?.ts ?? until ?? shots[fi].ts + Math.max(40, gap)
       const delay = Math.max(20, cs(nextTs) - cs(shots[fi].ts))
       gif.writeFrame(frame, W, H, {
         palette: k === 0 ? palette : undefined, // 팔레트는 처음 한 번만 (프레임마다 넣으면 장마다 768바이트씩)
@@ -92,8 +93,9 @@ export function writeGif(shots, out, { clip, until, budget = 9_000_000 } = {}) {
   }
 
   let best = null
-  for (const [colors, stride] of [[192, 1], [144, 1], [112, 1], [160, 2], [112, 2], [96, 3], [80, 4]]) {
-    best = encode(colors, stride)
+  // [색 수, 프레임 최소 간격 ms] — 색부터 줄이고, 그래도 크면 초당 50 → 30 → 20 → 15 → 12 → 10장
+  for (const [colors, gap] of [[192, 20], [144, 20], [144, 33], [128, 50], [112, 66], [112, 83], [96, 100]]) {
+    best = encode(colors, gap)
     console.log(`  시도: ${colors}색 / ${best.frames}프레임 → ${(best.bytes.length / 1e6).toFixed(2)} MB`)
     if (best.bytes.length <= budget) break
   }

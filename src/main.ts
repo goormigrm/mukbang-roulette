@@ -1,7 +1,7 @@
 import './styles.css'
 import { REROLL_PRESETS, cheese, store, suggestNextRerollCost } from './state'
 import type { AppliedDonation, FeedEntry, MenuItem, Round } from './state'
-import { MIN_SPIN_MS, RouletteWheel, segColor } from './roulette'
+import { MIN_SPIN_MS, RouletteWheel, segColor, wheelGeometry } from './roulette'
 import * as sound from './sound'
 import * as chzzk from './chzzk'
 import * as modal from './modal'
@@ -138,14 +138,12 @@ function placeRoundTitle(): void {
 
   // roulette.ts draw()와 같은 계산 — 원판 중심·반지름, 포인터 위 메뉴명 자리
   const size = cv.width
-  const pad = Math.max(58, size * 0.13)
-  const cx = cv.left + size / 2
-  const cy = cv.top + (size + pad) / 2
-  const R = (size - pad) / 2 - 8
-  const rimTop = cv.top + pad + 8
-  const labelFont = Math.max(20, size * 0.05)
+  const g = wheelGeometry(size)
+  const cx = cv.left + g.cx
+  const cy = cv.top + g.cy
+  const R = g.R
   // 메뉴명은 돌아가는 동안 계속 바뀌므로 가운데 절반 폭을 통째로 비워 둔다
-  const label: Box = { l: cx - size * 0.25, r: cx + size * 0.25, t: rimTop - 30 - labelFont, b: rimTop + 4 }
+  const label: Box = { l: cx - size * 0.25, r: cx + size * 0.25, t: cv.top + g.labelBase - g.labelFont, b: cv.top + g.rimTop + 4 }
 
   const overlaps = (a: Box, o: Box): boolean =>
     a.l < o.r + TITLE_GAP && a.r > o.l - TITLE_GAP && a.t < o.b + TITLE_GAP && a.b > o.t - TITLE_GAP

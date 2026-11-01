@@ -276,9 +276,16 @@ body {
   flex-shrink: 0;
 }
 
-/* 리롤 카드가 룰렛 칸 오른쪽 끝에 붙도록 칸 폭(cqw)을 잰다 */
-.wheel-area {
-  container-type: inline-size;
+/* 룰렛 자리 — 안내·버튼을 뺀 남은 높이를 다 가져가고, 룰렛은 그 안에서 가로·세로 중 짧은 쪽에 맞춘다.
+   (예전에는 640px 상한 + 화면 높이 - 340px라 전체화면·큰 모니터에서 위아래가 비었다)
+   리롤 카드도 이 칸 폭(cqw)으로 오른쪽 끝에 붙는다 */
+.wheel-area > .wheel-box {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  container-type: size;
+  display: grid;
+  place-items: center;
 }
 
 /* ── 리롤 접수 현황 카드 — 룰렛 오른쪽에 따로 (원판을 조금 가려도 된다 — 사용자) ──
@@ -362,14 +369,7 @@ body {
 
 .wheel-wrap {
   position: relative;
-  width: min(100%, 640px, calc(100vh - 340px));
-}
-
-/* 1700px보다 좁으면 안내·버튼이 더 접히므로 룰렛 아래를 더 비워 둔다 */
-@media (max-width: 1699px) {
-  .wheel-wrap {
-    width: min(100%, 640px, calc(100vh - 420px));
-  }
+  width: min(100cqw, 100cqh);
 }
 
 #wheel {
@@ -509,8 +509,11 @@ body {
 /* ---------- 버튼 ---------- */
 .controls {
   width: 100%;
+  /* 당첨 뒤 두 줄 배치(아래)와 같은 높이를 늘 잡아 둔다 — 단계가 바뀌어도 룰렛 크기가 출렁이지 않게 */
+  min-height: 96px;
   display: flex;
   flex-wrap: wrap;
+  align-content: center;
   justify-content: center;
   gap: 10px;
 }

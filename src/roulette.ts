@@ -12,6 +12,17 @@ import { boundaryIndexAt, crossings, easeOutCubic, freeTurn, planStop, tickBound
 import type { Boundary } from './spin'
 const POINTER_ANGLE = -Math.PI / 2 // 12시 방향
 
+/** 캔버스 한 변(size) → 원판·포인터·메뉴명 자리. main.ts의 현판 배치도 같은 값을 쓴다.
+ *  위쪽은 포인터 위 메뉴명이 들어갈 만큼만 비운다 — 나머지는 다 원판 */
+export function wheelGeometry(size: number) {
+  const s = Math.max(1, size / 580) // 포인터·메뉴명 간격은 580px 기준, 룰렛이 커지면 같이 키운다
+  const labelFont = Math.max(20, size * 0.05)
+  const pad = 30 * s + labelFont
+  const R = (size - pad) / 2 - 8
+  const rimTop = pad + 8
+  return { s, labelFont, cx: size / 2, cy: (size + pad) / 2, R, rimTop, labelBase: rimTop - 30 * s }
+}
+
 // 확장프로그램과 같은 계열의 선명한 원색 팔레트 (Material 계열, 인접 칸 구분 뚜렷)
 const PALETTE = [
   '#00BCD4', // cyan
@@ -85,8 +96,8 @@ export class RouletteWheel {
     private canvas: HTMLCanvasElement,
     private getItems: () => MenuItem[],
   ) {
-    const resize = () => this.fitCanvas()
-    window.addEventListener('resize', resize)
+    // 룰렛 크기는 창 크기만이 아니라 칸 배치로도 바뀐다(전체화면·단계별 버튼) — 캔버스 자체를 지켜본다
+    new ResizeObserver(() => this.fitCanvas()).observe(this.canvas)
     this.fitCanvas()
   }
 
@@ -143,7 +154,7 @@ export class RouletteWheel {
 
   private fitCanvas(): void {
     const dpr = window.devicePixelRatio || 1
-    const size = Math.min(this.canvas.clientWidth || 560, 760)
+    const size = this.canvas.clientWidth || 560
     this.canvas.width = size * dpr
     this.canvas.height = size * dpr
     this.draw()
@@ -243,10 +254,7 @@ export class RouletteWheel {
     ctx.clearRect(0, 0, size, size)
 
     // 상단에 라이브 라벨 + 포인터 공간을 확보하고 원판은 그 아래에 그린다
-    const pad = Math.max(58, size * 0.13)
-    const cx = size / 2
-    const cy = (size + pad) / 2
-    const R = (size - pad) / 2 - 8
+    const { s, labelFont, cx, cy, R, rimTop, labelBase } = wheelGeometry(size)
 
     const items = this.getItems()
     if (items.length === 0) {
@@ -305,23 +313,22 @@ export class RouletteWheel {
 
     // 현재 포인터가 가리키는 항목 이름 (포인터 위 실시간 표시 — 확장의 핵심 연출)
     const current = items[idx]
-    const rimTop = cy - R
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
-    ctx.font = `900 ${Math.max(20, size * 0.05)}px "Noto Sans KR", sans-serif`
+    ctx.font = `900 ${labelFont}px "Noto Sans KR", sans-serif`
     ctx.fillStyle = '#0E0808'
-    ctx.fillText(current.name, cx, rimTop - 30, size * 0.8)
+    ctx.fillText(current.name, cx, labelBase, size * 0.8)
 
     // 포인터 — 원판 밖 상단에서 아래를 향하는 검은 삼각형.
     // 돌 때는 핀을 칠 때마다 원판이 도는 쪽으로 살짝 튕겼다 돌아온다(딸깍과 같은 순간). 빠르면 기운 채로 핀을 타고 넘는다
     const kick = this.mode === 'idle' ? 0 : Math.max(0, 1 - (now - this.pegHitAt) / 90)
     ctx.save()
-    ctx.translate(cx, rimTop - 22)
+    ctx.translate(cx, rimTop - 22 * s)
     ctx.rotate(-0.24 * kick)
     ctx.beginPath()
-    ctx.moveTo(-11, 0)
-    ctx.lineTo(11, 0)
-    ctx.lineTo(0, 26)
+    ctx.moveTo(-11 * s, 0)
+    ctx.lineTo(11 * s, 0)
+    ctx.lineTo(0, 26 * s)
     ctx.closePath()
     ctx.fillStyle = '#1C1210'
     ctx.fill()

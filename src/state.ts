@@ -263,6 +263,9 @@ export class Store {
     this.confirmedDonors = Array.isArray(r.confirmedDonors) ? r.confirmedDonors.map(String) : []
     this.confirmedChance = Number(r.confirmedChance) || 0
     this.winnerChance = Number(r.winnerChance) || 0
+    // 리롤 금액은 첫 돌리기 전에 미리 정해 둘 수도 있으므로 모집 중이어도 이어받는다
+    this.currentRerollCost = typeof r.currentRerollCost === 'number' ? r.currentRerollCost : null
+    this.nextRerollCost = typeof r.nextRerollCost === 'number' ? r.nextRerollCost : null
     // 모집 중이었다면 직전 확정 결과만 이어받는다 (마감 카운트다운은 잇지 않고 모집 상태로)
     if (r.phase !== 'decision' && r.phase !== 'window') {
       this.confirmedWinner = r.confirmedWinner ?? null
@@ -277,8 +280,6 @@ export class Store {
     this.rerollUsers = Array.isArray(r.rerollUsers) ? r.rerollUsers.map(String) : []
     this.rerollUsers = this.rerollUsers.slice(this.rerollUsers.length - this.rerollCredits)
     this.rerollCount = Math.max(0, Number(r.rerollCount) || 0)
-    this.currentRerollCost = typeof r.currentRerollCost === 'number' ? r.currentRerollCost : null
-    this.nextRerollCost = typeof r.nextRerollCost === 'number' ? r.nextRerollCost : null
     this.windowOpened = Boolean(r.windowOpened)
     const deadline = Number(r.countdownDeadline) || 0
     const remain = deadline - Date.now()
@@ -720,6 +721,20 @@ export class Store {
       `🔔 리롤 도네 접수 시작! ${this.settings.rerollWindowSec}초 안에 단일 도네 ${cheese(this.effectiveRerollCost())} 이상${nextNote}`,
     )
     this.startCountdown(Date.now() + sec * 1000, sec * 1000)
+    this.changed()
+  }
+
+  /** [🔔 리롤 금액] — 첫 돌리기 전(모집·마감 중)에 이번 판 리롤 금액을 미리 정해 둔다 (철면수심 님 요청 2026-11-01).
+   *  접수는 그대로 당첨 발표 뒤 [리롤 도네 받기]로 열고, 그 창에 이 금액이 미리 채워진다.
+   *  next: 다음 회차 금액, null이면 마지막 리롤권을 쓸 때 정한다 */
+  presetRerollCosts(cost: number, next: number | null): void {
+    if (this.phase !== 'collect' && this.phase !== 'closing' && this.phase !== 'closed') return
+    const c = validCost(cost)
+    if (c === null) return
+    this.currentRerollCost = c
+    this.nextRerollCost = validCost(next)
+    const nextNote = this.nextRerollCost ? ` · 다음 리롤 ${cheese(this.nextRerollCost)}` : ''
+    this.addFeed('reroll', `💰 이번 판 리롤 금액: ${cheese(c)}${nextNote} — 당첨 발표 뒤 접수`)
     this.changed()
   }
 

@@ -447,7 +447,11 @@ function renderHistory(): void {
     right.className = 'win'
     const chance = r.chance ? ` ${r.chance.toFixed(1)}%` : ''
     right.textContent = `🏆 ${r.winner}${chance}${r.rerollCount > 0 ? ` (리롤 ${r.rerollCount}회)` : ''}`
-    head.append(caret, left, right)
+    // 윗줄 당첨 메뉴, 아랫줄 날짜·룰렛 이름 — 둘 다 길면 줄을 바꿔 다 보인다 (한 줄에 몰면 잘리고 날짜가 세로로 접혔다)
+    const meta = document.createElement('span')
+    meta.className = 'round-meta'
+    meta.append(left)
+    head.append(caret, right, meta)
 
     // 룰렛 이름 — 그 판에 이름을 안 적었으면 아무것도 붙이지 않고 공란으로 둔다
     const title = (r.title ?? '').trim()
@@ -456,7 +460,7 @@ function renderHistory(): void {
       tag.className = 'round-title-tag'
       tag.textContent = `🏷 ${title}`
       tag.title = `룰렛 이름: ${title}`
-      head.insertBefore(tag, left)
+      meta.append(tag)
     }
 
     const menus = document.createElement('ul')
@@ -541,10 +545,12 @@ function renderStatus(): void {
     지금 금액을 가장 크게, 다음 회차 금액은 작게 아래로 (예전엔 다음 금액 글씨가 더 커서 그 금액을 쏴야 하는 줄 알았다) */
 let rerollCardSig = ''
 function renderRerollCard(): void {
-  const show = store.windowOpened && ['window', 'decision', 'spinning'].includes(store.phase)
+  // 첫 돌리기 전에 금액을 정해 뒀으면 접수를 열기 전에도 미리 보인다 (리롤을 한 번이라도 쓴 뒤엔 아니다 — [다음 없이]로 끝낸 경우)
+  const preset = !store.windowOpened && store.rerollCount === 0 && store.currentRerollCost !== null
+  const show = preset || (store.windowOpened && ['window', 'decision', 'spinning'].includes(store.phase))
   elRerollCard.hidden = !show
   if (!show) return
-  const sig = `${store.effectiveRerollCost()}|${store.rerollCredits}|${store.nextRerollCost}`
+  const sig = `${preset}|${store.effectiveRerollCost()}|${store.rerollCredits}|${store.nextRerollCost}`
   if (sig === rerollCardSig) return
   rerollCardSig = sig
   const credits = store.rerollCredits > 0 ? `<div class="rc-credits">🔄 리롤권 ×${store.rerollCredits}</div>` : ''
@@ -553,10 +559,10 @@ function renderRerollCard(): void {
       ? `<div class="rc-next">다음 회차 <b>${cheese(store.nextRerollCost)}</b><span>지금 리롤권을 다 쓰면</span></div>`
       : ''
   elRerollCard.innerHTML =
-    `<div class="rc-head">🔔 리롤 접수 중</div>` +
-    `<div class="rc-label">지금 리롤</div>` +
+    `<div class="rc-head">${preset ? '🔄 이번 판 리롤' : '🔔 리롤 접수 중'}</div>` +
+    `<div class="rc-label">${preset ? '리롤 금액' : '지금 리롤'}</div>` +
     `<div class="rc-price">${store.effectiveRerollCost().toLocaleString('ko-KR')}<small>치즈</small></div>` +
-    `<div class="rc-sub">단일 도네 이 금액 이상</div>` +
+    `<div class="rc-sub">${preset ? '당첨 발표 뒤 접수' : '단일 도네 이 금액 이상'}</div>` +
     credits +
     next
 }
@@ -576,15 +582,22 @@ function renderButtons(): void {
   }
   const closingNow = store.phase === 'closing'
   const closedNow = store.phase === 'closed'
-  btnCloseEntry.hidden = !(store.phase === 'collect' || closingNow || closedNow)
+  const beforeSpin = store.phase === 'collect' || closingNow || closedNow
+  btnCloseEntry.hidden = !beforeSpin
   btnCloseEntry.disabled = store.menus.length < 1
   btnCloseEntry.textContent = closingNow
     ? `⏱ +${store.settings.closingSec}초 연장`
     : closedNow
       ? `⏱ ${store.settings.closingSec}초 더 받기`
       : `⏱ ${store.settings.closingSec}초 후 마감`
-  btnOpenWindow.hidden = store.phase !== 'decision'
-  btnOpenWindow.textContent = store.windowOpened ? '🔔 리롤 재접수 (금액 변경)' : '🔔 리롤 도네 받기'
+  // 첫 돌리기 전에는 리롤 금액만 미리 정해 둔다 — 리롤 버튼은 결과가 나와야 쓸 수 있으니 그 자리에
+  btnOpenWindow.hidden = !(store.phase === 'decision' || beforeSpin)
+  btnOpenWindow.textContent = beforeSpin
+    ? '🔔 리롤 금액'
+    : store.windowOpened
+      ? '🔔 리롤 재접수 (금액 변경)'
+      : '🔔 리롤 도네 받기'
+  btnReroll.hidden = beforeSpin
   btnReroll.disabled = !(
     store.rerollCredits > 0 &&
     (store.phase === 'decision' || store.phase === 'window')
@@ -857,16 +870,16 @@ btnOpenWindow.addEventListener('click', () => {
   // 회차마다 리롤 금액을 올려 받는 운영(2만 → 4만 → 10만)을 위해 접수 시작 시 금액 입력.
   // 이번 금액과 함께 **다음 금액**도 미리 정해 두면, 마지막 리롤권을 쓰는 순간 그 금액으로 바로 이어서 받는다.
   // 방송 화면에 그대로 찍히므로 브라우저 기본 prompt 대신 가운데 뜨는 우리 창으로 받는다.
+  // 첫 돌리기 전에 누르면 금액만 미리 정해 두고(룰렛 옆에 공개), 접수는 당첨 발표 뒤 이 창에서 연다 — 그때 이 금액이 채워져 있다
   const def = store.effectiveRerollCost()
+  const beforeSpin = ['collect', 'closing', 'closed'].includes(store.phase)
   void modal
     .askAmounts({
-      title: '🔔 리롤 도네 받기',
+      title: beforeSpin ? '🔔 이번 판 리롤 금액' : '🔔 리롤 도네 받기',
       // 구 단위로 끊어 넘긴다 — 한 문장이 줄 끝에서 어중간하게 갈리지 않게
-      desc: [
-        `지금부터 ${store.settings.rerollWindowSec}초 동안,`,
-        '이 금액 이상을 한 번에 쏜 사람마다',
-        '리롤권이 1개씩 쌓입니다.',
-      ],
+      desc: beforeSpin
+        ? ['돌리기 전에 미리 정해 두면', '룰렛 옆에 금액이 보이고,', '당첨 발표 뒤 [리롤 도네 받기]에', '이 금액이 채워집니다.']
+        : [`지금부터 ${store.settings.rerollWindowSec}초 동안,`, '이 금액 이상을 한 번에 쏜 사람마다', '리롤권이 1개씩 쌓입니다.'],
       fields: [
         { label: '이번 리롤 금액', value: def, min: 1000, presets: REROLL_PRESETS },
         {
@@ -880,12 +893,13 @@ btnOpenWindow.addEventListener('click', () => {
           hint: '마지막 리롤권을 쓰는 순간 이 금액으로 바로 이어서 받습니다. [나중 선택]은 그때 묻습니다.',
         },
       ],
-      confirmText: '접수 시작',
+      confirmText: beforeSpin ? '정하기' : '접수 시작',
       note: ['여러 명이 사면 그만큼 쌓이고,', '마지막 리롤이 최종입니다.', '합산은 인정되지 않습니다.'],
     })
     .then((r) => {
       if (r === null || r === 'skip') return
-      store.startRerollWindow(r[0] ?? def, r[1])
+      if (beforeSpin) store.presetRerollCosts(r[0] ?? def, r[1])
+      else store.startRerollWindow(r[0] ?? def, r[1])
     })
 })
 

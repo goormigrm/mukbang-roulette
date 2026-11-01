@@ -1085,14 +1085,30 @@ button {
   background: #fff;
   cursor: pointer;
   font-weight: 700;
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  /* ▶ | 당첨 메뉴 (길면 줄바꿈)
+         | 날짜 · N종 · 🏷 룰렛 이름 */
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'caret win'
+    '. meta';
+  gap: 3px 8px;
+  align-items: baseline;
 }
 
 .round-head .win {
+  grid-area: win;
   color: var(--red-deep);
-  white-space: nowrap;
+}
+
+.round-head .round-meta {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .round-menus {
@@ -1307,15 +1323,14 @@ button {
 }
 
 .round-head .caret {
-  flex-shrink: 0;
+  grid-area: caret;
   color: var(--red-deep);
   font-size: 12px;
   transition: transform 0.15s;
 }
 
 .round-head .round-when {
-  flex: 1;
-  text-align: left;
+  white-space: nowrap;
 }
 
 .round-head:hover {
@@ -1575,7 +1590,7 @@ button {
 
 /* 기록 행의 판 이름 */
 .round-head .round-title-tag {
-  flex-shrink: 0;
+  min-width: 0;
   padding: 1px 7px;
   border-radius: 6px;
   background: var(--cream-dark);

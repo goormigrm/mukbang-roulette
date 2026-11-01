@@ -572,6 +572,67 @@ describe('결과 확정 · 기록', () => {
 })
 
 // ───────────────────────────────────────────────────────────────
+describe('리롤 금액 미리 정하기 (첫 돌리기 전)', () => {
+  it('모집 중에 정하면 당첨 발표 뒤 접수가 그 금액으로 열린다', () => {
+    s.addMenu('짬뽕', 5, '가')
+    s.addMenu('짜장', 3, '나')
+    s.presetRerollCosts(30000, 50000)
+    expect(lastFeed()).toContain('30,000치즈')
+    spinTo(0)
+    expect(s.effectiveRerollCost()).toBe(30000)
+    expect(s.nextRerollCost).toBe(50000)
+    s.startRerollWindow() // [리롤 도네 받기]에서 금액을 안 바꾸고 바로 시작한 것과 같다
+    don('A', 20000)
+    expect(s.rerollCredits).toBe(0)
+    don('B', 30000)
+    expect(s.rerollCredits).toBe(1)
+    spinTo(0, true) // 마지막 리롤권 → 미리 정한 다음 금액으로
+    expect(s.effectiveRerollCost()).toBe(50000)
+  })
+  it('미리 정해도 접수는 당첨 발표 뒤 — 모집 중 큰 도네는 메뉴, 첫 스핀 중 도네는 무시', () => {
+    s.presetRerollCosts(20000, null)
+    don('A', 20000, '마라탕')
+    expect(menu('마라탕').weight).toBe(20)
+    s.beginSpin()
+    don('B', 20000)
+    expect(s.rerollCredits).toBe(0)
+    expect(s.windowOpened).toBe(false)
+  })
+  it('마감 카운트다운 중에도 정할 수 있고, 돌기 시작한 뒤·당첨 발표 뒤에는 이 방법으로 못 바꾼다', () => {
+    s.addMenu('짬뽕', 5, '가')
+    s.startClosing()
+    s.presetRerollCosts(30000, null)
+    expect(s.effectiveRerollCost()).toBe(30000)
+    s.beginSpin()
+    s.presetRerollCosts(40000, null)
+    expect(s.effectiveRerollCost()).toBe(30000)
+    s.pickWinner()
+    s.finishSpin()
+    s.presetRerollCosts(40000, null)
+    expect(s.effectiveRerollCost()).toBe(30000)
+  })
+  it('1,000치즈 미만·숫자 아님은 무시', () => {
+    s.presetRerollCosts(500, 40000)
+    s.presetRerollCosts(Number.NaN, 40000)
+    expect(s.currentRerollCost).toBeNull()
+    expect(s.nextRerollCost).toBeNull()
+  })
+  it('새로고침해도 이어지고, 결과를 확정하면 다음 판을 위해 비운다', () => {
+    s.addMenu('짬뽕', 5, '가')
+    s.presetRerollCosts(30000, 50000)
+    const t = new Store()
+    expect(t.phase).toBe('collect')
+    expect(t.effectiveRerollCost()).toBe(30000)
+    expect(t.nextRerollCost).toBe(50000)
+    spinTo(0)
+    s.confirmResult()
+    expect(s.currentRerollCost).toBeNull()
+    expect(s.nextRerollCost).toBeNull()
+    expect(s.effectiveRerollCost()).toBe(s.settings.rerollCost)
+  })
+})
+
+// ───────────────────────────────────────────────────────────────
 describe('[↩ 메뉴 추가로 돌아가기]', () => {
   it('기록 없이 모집으로 — 메뉴·칸·추천자는 그대로, 리롤 상태만 비운다', () => {
     toDecision()

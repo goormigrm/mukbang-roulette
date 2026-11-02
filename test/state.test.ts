@@ -492,14 +492,6 @@ describe('리롤', () => {
     s.setNextRerollCost(999)
     expect(s.nextRerollCost).toBeNull()
   })
-  it('[다음 없이 돌리기] 뒤에는 리롤 도네가 더 쌓이지 않는다', () => {
-    s.startRerollWindow(20000)
-    don('A', 20000)
-    s.endRerollSales()
-    spinTo(1, true)
-    don('B', 20000)
-    expect(s.rerollCredits).toBe(0)
-  })
 
   describe('금액이 오른 직후 직전 금액 유예 (방송 딜레이)', () => {
     beforeEach(() => {

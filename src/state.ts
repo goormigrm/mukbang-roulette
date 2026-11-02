@@ -751,16 +751,6 @@ export class Store {
     this.changed()
   }
 
-  /** 마지막 리롤권을 "다음 없이" 쓸 때 — 이번 리롤이 마지막, 이후 도네로는 리롤권이 생기지 않는다.
-   *  마음이 바뀌면 결과가 나온 뒤 [리롤 도네 받기]로 다시 열 수 있다 */
-  endRerollSales(): void {
-    if (!this.windowOpened) return
-    this.windowOpened = false
-    this.nextRerollCost = null
-    this.addFeed('info', '🔒 리롤 접수 종료 — 이번 리롤 뒤로는 리롤권을 받지 않습니다')
-    this.changed()
-  }
-
   /** 카운트다운 시작 (모집 마감 / 리롤 접수 공용). 인자를 주면 그 마감 시각을 그대로 이어받는다 */
   private startCountdown(deadline: number, durationMs: number): void {
     this.stopCountdown()

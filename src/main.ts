@@ -562,8 +562,8 @@ function renderStatus(): void {
     지금 금액을 가장 크게, 다음 회차 금액은 작게 아래로 (예전엔 다음 금액 글씨가 더 커서 그 금액을 쏴야 하는 줄 알았다) */
 let rerollCardSig = ''
 function renderRerollCard(): void {
-  // 첫 돌리기 전에 금액을 정해 뒀으면 돌리기 전부터 미리 보인다 (리롤을 한 번이라도 쓴 뒤엔 아니다 — [다음 없이]로 끝낸 경우)
-  const preset = !store.windowOpened && store.rerollCount === 0 && store.currentRerollCost !== null
+  // 첫 돌리기 전에 금액을 정해 뒀으면 돌리기 전부터 미리 보인다
+  const preset = !store.windowOpened && store.currentRerollCost !== null
   const show = preset || (store.windowOpened && ['window', 'decision', 'spinning'].includes(store.phase))
   elRerollCard.hidden = !show
   if (!show) return
@@ -915,7 +915,7 @@ btnOpenWindow.addEventListener('click', () => {
       note: ['여러 명이 사면 그만큼 쌓이고,', '리롤 결과가 그대로 최종입니다.', '합산은 인정되지 않습니다.'],
     })
     .then((r) => {
-      if (r === null || r === 'skip') return
+      if (r === null) return
       if (beforeSpin) store.presetRerollCosts(r[0] ?? def, r[1])
       else store.startRerollWindow(r[0] ?? def, r[1])
     })
@@ -932,12 +932,11 @@ async function doReroll(): Promise<void> {
       desc: ['이번 리롤로 리롤권을 다 씁니다.', '다음 리롤 금액을 정하면', '돌아가는 동안에도', '그 금액으로 이어서 받습니다.'],
       fields: [{ label: '다음 리롤 금액', value: suggestNextRerollCost(cur), min: 1000, presets: REROLL_PRESETS }],
       confirmText: '정하고 돌리기',
-      skipText: '다음 없이 돌리기',
-      note: [`지금 리롤 금액은 ${cheese(cur)}입니다.`, '[다음 없이 돌리기]는 리롤 접수를 끝냅니다.'],
+      // [다음 없이 돌리기]는 뺐다(사용자 지정) — 금액이 오르면 그만큼 쏘는 사람이 없을 때 리롤이 안 될 뿐
+      note: `지금 리롤 금액은 ${cheese(cur)}입니다.`,
     })
     if (r === null) return // 취소 — 돌리지 않는다
-    if (r === 'skip') store.endRerollSales()
-    else store.setNextRerollCost(r[0])
+    store.setNextRerollCost(r[0])
   }
   doSpin(true)
 }

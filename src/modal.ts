@@ -16,7 +16,6 @@ const elError = $('#modal-error')
 const elNote = $('#modal-note')
 const elForm = $<HTMLFormElement>('#modal-form')
 const btnCancel = $<HTMLButtonElement>('#modal-cancel')
-const btnSkip = $<HTMLButtonElement>('#modal-skip')
 const btnOk = $<HTMLButtonElement>('#modal-ok')
 
 /** 금액 입력칸 하나 */
@@ -45,14 +44,12 @@ export interface AmountDialogOptions {
   fields: AmountField[]
   /** 확인 버튼 글자 */
   confirmText?: string
-  /** 있으면 [취소]와 [확인] 사이에 버튼이 하나 더 생기고, 누르면 'skip'으로 닫힌다 */
-  skipText?: string
   /** 맨 아래 작은 안내. desc와 같이 여러 개를 주면 구 단위로 끊어 넘긴다 */
   note?: string | string[]
 }
 
-/** 창을 닫은 결과 — 확인: 칸마다 금액(비운 칸은 null) · 'skip': 보조 버튼 · null: 취소 */
-export type AmountDialogResult = (number | null)[] | 'skip' | null
+/** 창을 닫은 결과 — 확인: 칸마다 금액(비운 칸은 null) · null: 취소 */
+export type AmountDialogResult = (number | null)[] | null
 
 let resolveCurrent: ((v: AmountDialogResult) => void) | null = null
 let lastFocused: HTMLElement | null = null
@@ -198,15 +195,13 @@ function buildField(f: AmountField, i: number): HTMLInputElement {
 }
 
 /** 금액 입력 창을 띄운다.
- *  확인하면 칸마다 금액(비운 칸은 null), 보조 버튼은 'skip', 취소(Esc·바깥 클릭·[취소])는 null */
+ *  확인하면 칸마다 금액(비운 칸은 null), 취소(Esc·바깥 클릭·[취소])는 null */
 export function askAmounts(opts: AmountDialogOptions): Promise<AmountDialogResult> {
   close(null) // 혹시 열려 있으면 먼저 닫는다
   elTitle.textContent = opts.title
   setPhrases(elDesc, opts.desc)
   setPhrases(elNote, opts.note)
   btnOk.textContent = opts.confirmText ?? '확인'
-  btnSkip.textContent = opts.skipText ?? ''
-  btnSkip.hidden = !opts.skipText
   elError.hidden = true
   elFields.innerHTML = ''
   const inputs = opts.fields.map(buildField)
@@ -243,7 +238,6 @@ export function askAmounts(opts: AmountDialogOptions): Promise<AmountDialogResul
 
 // ---- 닫기 경로: [취소] · 보조 버튼 · 바깥 클릭 · Esc ----
 btnCancel.addEventListener('click', () => close(null))
-btnSkip.addEventListener('click', () => close('skip'))
 backdrop.addEventListener('mousedown', (e) => {
   if (e.target === backdrop) close(null)
 })

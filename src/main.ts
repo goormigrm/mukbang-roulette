@@ -490,7 +490,7 @@ function renderStatus(): void {
       html = store.confirmedWinner
         ? `<div class="big"><span class="phrase">오늘의 메뉴:</span> <span class="phrase"><b>${escapeHtml(store.confirmedWinner)}</b> 🎉</span></div>`
         : `<div class="muted">${ko(`도네이션 ${cheese(s.wonPerSlot)}당 1칸 · 후보가 들어오면 돌릴 수 있어요`)}</div>
-           <div class="muted small-text">${ko('💬 이미 있는 메뉴 뒤에 쉼표(,)나 마침표(.)를 찍고 하고 싶은 말을 적으면 그 메뉴에 합쳐져요 (예: 부대찌개, 맛있겠다) · 처음 나오는 메뉴는 적은 그대로 들어가요')}</div>`
+           <div class="muted small-text">${ko('💬 메뉴 뒤에 쉼표(,)·마침표(.) 찍고 한마디 — 이미 있는 메뉴면 합쳐져요')}</div>`
       break
     case 'closing': {
       const remain = Math.ceil(store.countdownRemainMs / 1000)

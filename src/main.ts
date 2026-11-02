@@ -489,8 +489,8 @@ function renderStatus(): void {
     case 'collect':
       html = store.confirmedWinner
         ? `<div class="big"><span class="phrase">오늘의 메뉴:</span> <span class="phrase"><b>${escapeHtml(store.confirmedWinner)}</b> 🎉</span></div>`
-        : `<div class="muted">${ko(`도네이션 ${cheese(s.wonPerSlot)}당 1칸 · 후보가 들어오면 돌릴 수 있어요`)}</div>
-           <div class="muted small-text">${ko('💬 메뉴 뒤에 쉼표(,)·마침표(.) 찍고 한마디 — 이미 있는 메뉴면 합쳐져요')}</div>`
+        : `<div class="muted">${ko(`도네이션 ${cheese(s.wonPerSlot)}당 1칸`)}</div>
+           <div class="muted">${ko('💬 메뉴 뒤에 쉼표(,)·마침표(.) 찍고 한마디 — 이미 있는 메뉴면 합침')}</div>`
       break
     case 'closing': {
       const remain = Math.ceil(store.countdownRemainMs / 1000)

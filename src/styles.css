@@ -1101,6 +1101,21 @@ button {
   color: var(--red-deep);
 }
 
+/* 기록 지우기 ✕ — 펼치기 버튼(줄 전체) 오른쪽 위에 겹쳐 올리고, 글자가 그 밑으로 들어가지 않게 자리를 비워 둔다 */
+.round-item {
+  position: relative;
+}
+
+.round-item .round-head {
+  padding-right: 44px;
+}
+
+.round-del {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+}
+
 .round-head .round-meta {
   grid-area: meta;
   display: flex;

@@ -975,6 +975,15 @@ export class Store {
     return menus.length
   }
 
+  /** 기록 한 판 지우기 — [결과 확정]을 잘못 눌러 남은 판을 치운다 (사용자 요청).
+   *  id 대신 그 객체로 찾는다 — 불러온 기록은 id가 없거나 겹칠 수 있다 */
+  removeRound(r: Round): void {
+    if (!this.history.includes(r)) return
+    this.history = this.history.filter((x) => x !== r)
+    this.addFeed('info', `🗑 기록 삭제 — "${r.winner}"${r.title?.trim() ? ` · 🏷 ${r.title.trim()}` : ''}`)
+    this.changed()
+  }
+
   // ---- 기록 내보내기 / 불러오기 ----
   exportHistoryJson(): string {
     return JSON.stringify(

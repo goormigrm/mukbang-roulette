@@ -476,7 +476,23 @@ function renderHistory(): void {
       head.classList.toggle('open', !menus.hidden)
       caret.textContent = menus.hidden ? '▶' : '▼'
     })
-    li.append(head, menus)
+    // 지우기 ✕ — 줄 전체가 펼치기 버튼이라 안에 못 넣고, 오른쪽 위에 겹쳐 올린다
+    const del = document.createElement('button')
+    del.type = 'button'
+    del.className = 'icon-btn del round-del'
+    del.textContent = '✕'
+    del.title = '이 기록 지우기'
+    del.addEventListener('click', async () => {
+      const ok = await modal.askAmounts({
+        title: '🗑 기록 지우기',
+        desc: [`${fmtDate(r.endedAt)} · 🏆 ${r.winner}${title ? ` · 🏷 ${title}` : ''}`, '이 기록을 지웁니다.', '되돌릴 수 없습니다.'],
+        fields: [],
+        confirmText: '지우기',
+      })
+      if (ok !== null) store.removeRound(r)
+    })
+    li.className = 'round-item'
+    li.append(head, del, menus)
     elHistoryList.appendChild(li)
   })
 }

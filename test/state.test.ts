@@ -567,6 +567,23 @@ describe('결과 확정 · 기록', () => {
     expect(s.confirmedWinner).toBe('짬뽕')
     expect(s.menus).toHaveLength(3) // 후보는 남는다
   })
+  it('잘못 확정한 기록은 그 판만 지운다 — 새로고침해도 지워진 채', () => {
+    s.setTitle('메인')
+    toDecision()
+    s.confirmResult() // 짬뽕
+    spinTo(1)
+    s.confirmResult() // 짜장 — 잘못 누른 판
+    spinTo(2)
+    s.confirmResult() // 탕수육
+    const wrong = s.history[1]
+    expect(wrong.winner).toBe('짜장')
+    s.removeRound(wrong)
+    expect(s.history.map((r) => r.winner)).toEqual(['탕수육', '짬뽕'])
+    expect(lastFeed()).toBe('🗑 기록 삭제 — "짜장" · 🏷 메인')
+    s.removeRound(wrong) // 이미 지운 판은 아무 일 없음
+    expect(s.history).toHaveLength(2)
+    expect(new Store().history.map((r) => r.winner)).toEqual(['탕수육', '짬뽕'])
+  })
   it('[진행 중]으로 돌아오면 확정 도장을 내린다 — 기록은 그대로', () => {
     toDecision()
     s.confirmResult()

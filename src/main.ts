@@ -522,7 +522,7 @@ function renderStatus(): void {
     case 'decision': {
       const creditNote =
         store.rerollCredits > 0
-          ? `<div class="armed-banner">${ko(`🔄 리롤권 ×${store.rerollCredits} 보유 — 마지막 리롤이 최종!`)}</div>`
+          ? `<div class="armed-banner">${ko(`🔄 리롤권 ×${store.rerollCredits} 보유 — 리롤 결과가 그대로 최종!`)}</div>`
           : ''
       html = store.windowOpened
         ? `<div class="big reroll-note">${ko(`🔔 리롤 접수 중 — 단일 도네 ${cost} 이상이면 리롤권 (확정 전까지)`)}</div>`
@@ -603,11 +603,12 @@ function renderButtons(): void {
     store.rerollCredits > 0 &&
     (store.phase === 'decision' || store.phase === 'window')
   )
-  // 다음 금액을 안 정한 마지막 리롤권이면 누를 때 묻는다는 걸 미리 알린다.
+  // 다음 금액을 안 정했고 리롤권이 하나 남았으면 누를 때 다음 금액을 묻는다는 걸 미리 알린다.
+  // "마지막"이라고 쓰면 리롤을 더 못 받는 줄 안다(사용자 지적) — 다음 금액을 넣는 버튼으로 읽히게
   // 정해 둔 다음 금액은 버튼에 쓰지 않는다 — 상태바에 크게 나온다
   const askOnClick = store.rerollCredits === 1 && store.windowOpened && store.nextRerollCost === null
   btnReroll.textContent =
-    store.rerollCredits < 1 ? '🔄 리롤' : askOnClick ? '🔄 리롤 ×1 (마지막)' : `🔄 리롤 ×${store.rerollCredits}`
+    store.rerollCredits < 1 ? '🔄 리롤' : askOnClick ? '🔄 리롤 ×1 (다음 금액 입력)' : `🔄 리롤 ×${store.rerollCredits}`
   btnConfirm.hidden = !(store.phase === 'decision' || store.phase === 'window')
   btnBack.hidden = btnConfirm.hidden
   // 결과가 나온 뒤에는 버튼을 역할별로 나눠 놓는다 (윗줄 리롤 · 아랫줄 예외 · 오른쪽 따로 결과 확정 — styles.css)
@@ -885,17 +886,17 @@ btnOpenWindow.addEventListener('click', () => {
         { label: '이번 리롤 금액', value: def, min: 1000, presets: REROLL_PRESETS },
         {
           label: '다음 리롤 금액',
-          value: store.nextRerollCost ?? suggestNextRerollCost(def),
+          value: store.nextRerollCost, // 정해 둔 게 없으면 [나중 선택]이 기본 (사용자 지정)
           min: 1000,
           presets: REROLL_PRESETS,
           optional: true,
           // 리롤해 보고 정하고 싶을 수도 있다 — [나중 선택]이면 마지막 리롤권을 누를 때 묻는다
           laterText: '나중 선택',
-          hint: '마지막 리롤권을 쓰는 순간 이 금액으로 바로 이어서 받습니다. [나중 선택]은 그때 묻습니다.',
+          hint: '리롤권을 다 쓰는 순간 이 금액으로 바로 이어서 받습니다. [나중 선택]은 그때 묻습니다.',
         },
       ],
       confirmText: beforeSpin ? '정하기' : '접수 시작',
-      note: ['여러 명이 사면 그만큼 쌓이고,', '마지막 리롤이 최종입니다.', '합산은 인정되지 않습니다.'],
+      note: ['여러 명이 사면 그만큼 쌓이고,', '리롤 결과가 그대로 최종입니다.', '합산은 인정되지 않습니다.'],
     })
     .then((r) => {
       if (r === null || r === 'skip') return
@@ -911,12 +912,12 @@ async function doReroll(): Promise<void> {
   if (store.rerollCredits === 1 && store.windowOpened && store.nextRerollCost === null) {
     const cur = store.effectiveRerollCost()
     const r = await modal.askAmounts({
-      title: '🔄 마지막 리롤권',
-      desc: ['이 리롤을 돌리면 남은 리롤권이 없습니다.', '다음 리롤 금액을 정해 두면', '돌아가는 동안에도 바로 받습니다.'],
+      title: '🔄 다음 리롤 금액',
+      desc: ['이번 리롤로 리롤권을 다 씁니다.', '다음 리롤 금액을 정하면', '돌아가는 동안에도', '그 금액으로 이어서 받습니다.'],
       fields: [{ label: '다음 리롤 금액', value: suggestNextRerollCost(cur), min: 1000, presets: REROLL_PRESETS }],
       confirmText: '정하고 돌리기',
       skipText: '다음 없이 돌리기',
-      note: [`지금 리롤 금액은 ${cheese(cur)}입니다.`, '[다음 없이 돌리기]는 이번 리롤이 마지막입니다.'],
+      note: [`지금 리롤 금액은 ${cheese(cur)}입니다.`, '[다음 없이 돌리기]는 리롤 접수를 끝냅니다.'],
     })
     if (r === null) return // 취소 — 돌리지 않는다
     if (r === 'skip') store.endRerollSales()

@@ -757,7 +757,7 @@ export class Store {
     if (!this.windowOpened) return
     this.windowOpened = false
     this.nextRerollCost = null
-    this.addFeed('info', '🔒 리롤 접수 종료 — 이번 리롤이 마지막입니다')
+    this.addFeed('info', '🔒 리롤 접수 종료 — 이번 리롤 뒤로는 리롤권을 받지 않습니다')
     this.changed()
   }
 

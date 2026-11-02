@@ -128,15 +128,12 @@ interface RoundState {
   phase: Phase
   title?: string
   winner: MenuItem | null
-  confirmedWinner: string | null
   rerollCredits: number
   rerollUsers: string[]
   rerollCount: number
   currentRerollCost: number | null
   nextRerollCost?: number | null
   windowOpened: boolean
-  confirmedDonors?: string[]
-  confirmedChance?: number
   winnerChance?: number
   countdownDeadline: number
   countdownDurationMs: number
@@ -260,21 +257,15 @@ export class Store {
   /** 새로고침 전에 진행 중이던 라운드(당첨·리롤권·접수 상태)를 이어받는다 */
   private restoreRound(r: RoundState): void {
     this.title = typeof r.title === 'string' ? r.title : ''
-    this.confirmedDonors = Array.isArray(r.confirmedDonors) ? r.confirmedDonors.map(String) : []
-    this.confirmedChance = Number(r.confirmedChance) || 0
     this.winnerChance = Number(r.winnerChance) || 0
     // 리롤 금액은 첫 돌리기 전에 미리 정해 둘 수도 있으므로 모집 중이어도 이어받는다
     this.currentRerollCost = typeof r.currentRerollCost === 'number' ? r.currentRerollCost : null
     this.nextRerollCost = typeof r.nextRerollCost === 'number' ? r.nextRerollCost : null
-    // 모집 중이었다면 직전 확정 결과만 이어받는다 (마감 카운트다운은 잇지 않고 모집 상태로)
-    if (r.phase !== 'decision' && r.phase !== 'window') {
-      this.confirmedWinner = r.confirmedWinner ?? null
-      return
-    }
+    // 모집 중이었다면 첫 화면으로 (마감 카운트다운은 잇지 않는다. 확정 도장도 새로고침하면 [진행 중] 탭이라 내린다)
+    if (r.phase !== 'decision' && r.phase !== 'window') return
     if (!r.winner) return
     // 목록의 같은 메뉴 객체에 다시 잇는다 — 복사본이면 새로고침 뒤 이름 고치기·합치기가 당첨에 반영되지 않는다
     this.winner = this.menus.find((x) => x.id === r.winner!.id) ?? r.winner
-    this.confirmedWinner = r.confirmedWinner ?? null
     this.rerollCredits = Math.max(0, Number(r.rerollCredits) || 0)
     // 예전 저장값은 판 전체 구매자가 쌓여 있었다 — 남은 리롤권 수만큼 최근 것만 남긴다
     this.rerollUsers = Array.isArray(r.rerollUsers) ? r.rerollUsers.map(String) : []
@@ -299,7 +290,6 @@ export class Store {
     return {
       phase: this.phase,
       winner: this.winner,
-      confirmedWinner: this.confirmedWinner,
       rerollCredits: this.rerollCredits,
       rerollUsers: this.rerollUsers,
       rerollCount: this.rerollCount,
@@ -307,8 +297,6 @@ export class Store {
       nextRerollCost: this.nextRerollCost,
       windowOpened: this.windowOpened,
       title: this.title,
-      confirmedDonors: this.confirmedDonors,
-      confirmedChance: this.confirmedChance,
       winnerChance: this.winnerChance,
       countdownDeadline: this.countdownDeadline,
       countdownDurationMs: this.countdownDurationMs,
@@ -367,11 +355,15 @@ export class Store {
     return this.menus.reduce((a, m) => a + m.weight, 0)
   }
 
-  /** 띄어쓰기·뒤에 붙은 "추가"를 무시하고 같은 메뉴를 찾는다 (먼저 등록된 항목이 이긴다) */
+  /** 띄어쓰기·뒤에 붙은 "추가"를 무시하고 같은 메뉴를 찾는다 (먼저 등록된 항목이 이긴다).
+   *  없으면 첫 쉼표·마침표 앞부분으로 한 번 더 — "부대찌개, 맛있겠다"의 뒤는 하고 싶은 말이다.
+   *  앞부분도 처음 보는 메뉴면 못 찾은 것으로 두어, 적은 그대로 새 메뉴가 된다 (사용자 지정) */
   findMenu(name: string): MenuItem | undefined {
-    const key = menuKey(name)
-    if (!key) return undefined
-    return this.menus.find((m) => menuKey(m.name) === key)
+    const byKey = (n: string): MenuItem | undefined => {
+      const key = menuKey(n)
+      return key ? this.menus.find((m) => menuKey(m.name) === key) : undefined
+    }
+    return byKey(name) ?? byKey(name.split(/[,.]/)[0])
   }
 
   /** 메뉴 칸 더하기 — 이미 있는 메뉴면 그 항목에 합쳐진다 */
@@ -911,6 +903,7 @@ export class Store {
     this.addFeed('info', '↩ 메뉴 추가로 돌아감 — 이번 결과는 기록하지 않고, 지금부터 도네를 다시 메뉴로 받습니다')
     this.phase = 'collect'
     this.winner = null
+    this.confirmedWinner = null // 지난 판 확정 도장이 다시 뜨지 않게 — 첫 화면처럼
     this.rerollCount = 0
     this.rerollCredits = 0
     this.rerollUsers = []
@@ -918,6 +911,13 @@ export class Store {
     this.nextRerollCost = null
     this.windowOpened = false
     this.countdownRemainMs = 0
+    this.changed()
+  }
+
+  /** 확정 도장 내리기 — 확정 뒤 [진행 중] 탭으로 돌아오면 다음 판 첫 화면처럼 비운다 (사용자 지정) */
+  dismissConfirmed(): void {
+    if (this.confirmedWinner === null) return
+    this.confirmedWinner = null
     this.changed()
   }
 

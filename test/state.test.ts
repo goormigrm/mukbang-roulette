@@ -190,6 +190,29 @@ describe('도네 → 메뉴 칸', () => {
     expect(menu('부대 찌개').donors).toEqual(['A', 'B', 'C'])
     expect(lastFeed()).toContain('(="부대찌개")')
   })
+  it('쉼표·마침표 뒤 하고 싶은 말은 떼고, 앞부분이 이미 있는 메뉴면 그 메뉴에 합친다', () => {
+    don('A', 3000, '부대찌개')
+    don('B', 2000, '부대찌개, 맛있겠다')
+    don('C', 1000, '부대 찌개. 오늘은 이거!')
+    don('D', 1000, '부대찌개 추가,꼭 먹어줘')
+    expect(names()).toEqual(['부대찌개'])
+    expect(menu('부대찌개').weight).toBe(7)
+    expect(menu('부대찌개').donors).toEqual(['A', 'B', 'C', 'D'])
+    expect(lastFeed()).toContain('"부대찌개" (="부대찌개 추가,꼭 먹어줘") ×1')
+  })
+  it('앞부분이 처음 나오는 메뉴면 적은 그대로 새 메뉴가 된다', () => {
+    don('A', 2000, '짜장, 탕수육 세트')
+    don('B', 1000, '짜장, 탕수육 세트') // 통째로 같으면 그대로 합쳐진다
+    don('C', 1000, '...')
+    expect(names()).toEqual(['짜장, 탕수육 세트', '...'])
+    expect(menu('짜장, 탕수육 세트').weight).toBe(3)
+  })
+  it('직접 추가도 같은 규칙 — 버저비터 뒤 늦은 도네를 옮겨 적을 때', () => {
+    s.addMenu('마라탕', 2, '가')
+    s.addMenu('마라탕. 2단계로요', 3, '수동')
+    expect(names()).toEqual(['마라탕'])
+    expect(menu('마라탕').weight).toBe(5)
+  })
   it('같은 사람이 같은 메뉴를 또 쏘면 칸만 늘고 추천자는 한 번만', () => {
     don('A', 1000, '짬뽕')
     don('A', 2000, '짬뽕')
@@ -544,6 +567,13 @@ describe('결과 확정 · 기록', () => {
     expect(s.confirmedWinner).toBe('짬뽕')
     expect(s.menus).toHaveLength(3) // 후보는 남는다
   })
+  it('[진행 중]으로 돌아오면 확정 도장을 내린다 — 기록은 그대로', () => {
+    toDecision()
+    s.confirmResult()
+    s.dismissConfirmed()
+    expect(s.confirmedWinner).toBeNull()
+    expect(s.history[0].winner).toBe('짬뽕')
+  })
   it('당첨 발표 전에는 확정할 수 없다', () => {
     s.addMenu('짬뽕', 1)
     s.confirmResult()
@@ -674,6 +704,13 @@ describe('[↩ 메뉴 추가로 돌아가기]', () => {
     expect(s.nextRerollCost).toBeNull()
     don('B', 20000, '마라탕')
     expect(menu('마라탕').weight).toBe(20)
+  })
+  it('지난 판 확정 도장이 다시 뜨지 않는다 — 첫 화면처럼', () => {
+    toDecision()
+    s.confirmResult()
+    spinTo(1)
+    s.backToCollect()
+    expect(s.confirmedWinner).toBeNull()
   })
   it('모집 중에는 아무 일도 안 한다', () => {
     s.addMenu('짬뽕', 1)
@@ -866,7 +903,7 @@ describe('새로고침 복원 (localStorage)', () => {
     expect(t.settings.rerollCost).toBe(30000)
     expect(t.settings.graceSec).toBe(3)
     expect(t.paused).toBe(true)
-    expect(t.confirmedWinner).toBe('짬뽕')
+    expect(t.confirmedWinner).toBeNull() // 새로고침하면 [진행 중] 탭 — 확정 도장 없이 첫 화면
     expect(t.phase).toBe('collect')
   })
   it('당첨 발표 중이면 당첨·리롤권·금액·접수 상태를 이어받는다', () => {

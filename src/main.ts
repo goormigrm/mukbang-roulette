@@ -489,7 +489,8 @@ function renderStatus(): void {
     case 'collect':
       html = store.confirmedWinner
         ? `<div class="big"><span class="phrase">오늘의 메뉴:</span> <span class="phrase"><b>${escapeHtml(store.confirmedWinner)}</b> 🎉</span></div>`
-        : `<div class="muted">${ko(`도네이션 ${cheese(s.wonPerSlot)}당 1칸 · 후보가 들어오면 돌릴 수 있어요`)}</div>`
+        : `<div class="muted">${ko(`도네이션 ${cheese(s.wonPerSlot)}당 1칸 · 후보가 들어오면 돌릴 수 있어요`)}</div>
+           <div class="muted small-text">${ko('💬 이미 있는 메뉴 뒤에 쉼표(,)나 마침표(.)를 찍고 하고 싶은 말을 적으면 그 메뉴에 합쳐져요 (예: 부대찌개, 맛있겠다) · 처음 나오는 메뉴는 적은 그대로 들어가요')}</div>`
       break
     case 'closing': {
       const remain = Math.ceil(store.countdownRemainMs / 1000)
@@ -1040,6 +1041,8 @@ $<HTMLFormElement>('#test-form').addEventListener('submit', (e) => {
 
 // ---------- 탭 ----------
 function activateTab(name: string): void {
+  // 확정 뒤 [진행 중]으로 돌아오면 다음 판이니 확정 도장을 내리고 첫 화면처럼
+  if (name === 'current') store.dismissConfirmed()
   document.querySelectorAll<HTMLButtonElement>('.tab').forEach((b) => {
     b.classList.toggle('active', b.dataset.tab === name)
   })

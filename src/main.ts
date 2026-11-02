@@ -944,20 +944,39 @@ btnBack.addEventListener('click', async () => {
   activateTab('current') // 들어오는 메뉴를 바로 볼 수 있게
 })
 btnPause.addEventListener('click', () => store.togglePaused())
-// 전체화면 — 방송 중 크롬 탭·주소창·북마크·작업표시줄을 숨긴다. 끄기는 이 스위치나 Esc
+// 전체화면 — 방송 중 크롬 탭·주소창·북마크·작업표시줄을 숨긴다. 켜기·끄기는 이 스위치·F11, 끄기는 Esc도
+// 크롬 자체 F11 전체화면(주소창에 포커스가 있을 때 누른 F11)은 fullscreenElement에 안 잡혀 display-mode로 알아챈다
+const browserFull = matchMedia('(display-mode: fullscreen)')
 function renderFull(): void {
-  const on = Boolean(document.fullscreenElement)
+  const chromeOnly = browserFull.matches && !document.fullscreenElement
+  const on = Boolean(document.fullscreenElement) || chromeOnly
   btnFull.setAttribute('aria-pressed', String(on))
-  btnFull.title = on ? '전체화면 — 눌러서 끄기 (Esc도 됨)' : '전체화면 켜기 — 방송 중 크롬 탭·주소창·북마크를 숨긴다'
+  btnFull.title = chromeOnly
+    ? '크롬 전체화면(F11) — F11을 눌러 끄기'
+    : on
+      ? '전체화면 — 눌러서 끄기 (Esc·F11도 됨)'
+      : '전체화면 켜기 (F11도 됨) — 방송 중 크롬 탭·주소창·북마크를 숨긴다'
 }
 btnFull.addEventListener('click', () => {
-  if (document.fullscreenElement) void document.exitFullscreen()
-  else void document.documentElement.requestFullscreen().catch(() => undefined)
+  if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined)
+  else if (browserFull.matches) {
+    // 크롬이 직접 켠 F11 전체화면은 페이지가 끌 수 없다
+    store.addFeed('info', '⛶ 크롬 전체화면(F11)은 F11을 다시 눌러야 꺼집니다')
+    store.emitChange()
+  } else void document.documentElement.requestFullscreen().catch(() => undefined)
+})
+// F11로 켤 때 크롬 자체 전체화면 대신 스위치와 같은 전체화면으로 — 그래야 스위치·Esc·새 버전 미루기가 같이 움직인다.
+// 켜져 있을 때의 F11은 크롬이 페이지보다 먼저 받아 끄므로(가로채지 않는다) 끄는 쪽은 fullscreenchange로 따라온다
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'F11' || document.fullscreenElement || browserFull.matches) return
+  e.preventDefault()
+  void document.documentElement.requestFullscreen().catch(() => undefined)
 })
 document.addEventListener('fullscreenchange', () => {
   renderFull()
   maybeReload() // 전체화면을 끄면 미뤄 둔 새 버전 적용
 })
+browserFull.addEventListener('change', renderFull)
 renderFull()
 
 btnSound.addEventListener('click', () => {
